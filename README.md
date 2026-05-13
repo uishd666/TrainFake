@@ -2,7 +2,7 @@
 
 [中文 README](README_zh.md)
 
-![TrainFake hero](assets/readme-hero.png)
+![TrainFake hero](assets/readme-hero-v2.png)
 
 > Cinematic AI training logs for demos, tests, teaching, and suspiciously serious terminals.
 

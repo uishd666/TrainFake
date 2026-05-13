@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-![TrainFake hero](assets/readme-hero.png)
+![TrainFake hero](assets/readme-hero-v2.png)
 
 > 可信 AI 训练日志生成器：给演示、教学、测试和认真摸鱼一个完整终端现场。
 
