@@ -2,6 +2,9 @@
 
 [English README](README.md)
 
+![slackDL hero](assets/readme-hero.png)
+
+
 一个为深度学习从业者、实验室选手和临时需要“电脑正在努力训练”的朋友准备的小工具。它不会帮你把 loss 真正降下去，但会认真地打印训练日志、滚动进度条、模拟保存 checkpoint，让屏幕看起来像是在跑一场很有前途的大实验。适合演示、测试日志解析，也适合在需要合理摸鱼的时候，给终端一点忙碌的尊严。
 
 `slackDL` 是一个小型 Python CLI 包，用来模拟深度学习训练日志。默认情况下，它可以打印 Hugging Face Transformers `Trainer` 风格的字典日志，也可以模拟 DeepSpeed、vLLM、Stable Diffusion/Diffusers 风格的指标输出，并通过 `tqdm` 进度条展示不断变化的 `sample/s` 吞吐量。
@@ -16,7 +19,7 @@ slackDL
 ## 使用
 
 ```bash
-slackDL --steps 27161 --loss-start 1.5 --loss-min 0.1 --acc-start 0.5 --oscillation 0.05 --step-delay 0.12 --log-every 100 --save-every 1900 --project-name project-name --run-name run-name
+slackDL --steps 27161 --loss-start 1.5 --loss-min 0.1 --acc-start 0.5 --oscillation 0.05 --step-delay 0.12 --log-every 100 --save-every 100 --project-name project-name --run-name run-name
 ```
 
 参数：

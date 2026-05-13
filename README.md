@@ -2,6 +2,9 @@
 
 [Chinese README](README_zh.md)
 
+![slackDL hero](assets/readme-hero.png)
+
+
 `slackDL` is a small Python CLI package that simulates deep learning training logs. It can print Hugging Face Transformers `Trainer` dictionaries by default, or mimic DeepSpeed, vLLM, and Stable Diffusion/Diffusers-style metric output while showing a `tqdm` progress bar with changing `sample/s` throughput.
 
 ## Install
@@ -14,7 +17,7 @@ slackDL
 ## Usage
 
 ```bash
-slackDL --steps 27161 --loss-start 1.5 --loss-min 0.1 --acc-start 0.5 --oscillation 0.05 --step-delay 0.12 --log-every 100 --save-every 1900 --project-name project-name --run-name run-name
+slackDL --steps 27161 --loss-start 1.5 --loss-min 0.1 --acc-start 0.5 --oscillation 0.05 --step-delay 0.12 --log-every 100 --save-every 100 --project-name project-name --run-name run-name
 ```
 
 Options:
