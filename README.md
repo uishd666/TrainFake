@@ -6,7 +6,7 @@
 
 A little tool for deep learning professionals, lab enthusiasts, and anyone who needs to make it look like their computer is “hard at work training” for a moment. It won’t actually help you reduce your loss, but it will diligently print training logs, display a scrolling progress bar, and simulate checkpoint saves—making your screen look like it’s running a promising large-scale experiment. It’s perfect for demos, parsing test logs, or simply giving your terminal a bit of “busy dignity” when you need a reasonable excuse to slack off.
 
-`slackDL` is a small Python CLI package that simulates deep learning training logs. It can print Hugging Face Transformers `Trainer` dictionaries by default, or mimic DeepSpeed, vLLM, and Stable Diffusion/Diffusers-style metric output while showing a `tqdm` progress bar with changing `sample/s` throughput.
+`slackDL` is a small Python CLI package that simulates deep learning training logs. It can print Hugging Face Transformers `Trainer` dictionaries by default, or mimic DeepSpeed, vLLM, and Stable Diffusion/Diffusers-style metric output while showing a `tqdm` progress bar with changing `sample/s` throughput. v0.2 adds reproducible demo seeds, training scenarios, and realistic little incidents such as loss spikes, sharded checkpoint saves, scaler overflows, and wandb retry noise.
 
 ## Install
 
@@ -32,6 +32,9 @@ Options:
 - `--speed-jitter`: relative per-sample speed variation, default `0.22`
 - `--log-every`: print logs every N samples, default `100`
 - `--log-style`: choose the output style, one of `trainer`, `deepspeed`, `vllm`, or `stable-diffusion`; default `trainer`
+- `--scenario`: choose the training storyline, one of `normal`, `llm-pretrain`, `finetune`, or `diffusion`; default `normal`
+- `--chaos-level`: density of realistic training incidents, one of `0`, `1`, or `2`; default `1`
+- `--seed`: seed simulated metrics and incidents for reproducible demos
 - `--save-every`: simulate saving a checkpoint every N samples, default `1900`; use `0` to disable
 - `--save-delay`: seconds to pause when simulating checkpoint saves, default `1.2`
 - `--project-name`: project directory used in simulated checkpoint paths, default `project-name`
@@ -47,12 +50,21 @@ Log styles:
 - `vllm`: vLLM serving metrics inspired by its logged engine stats and Prometheus metrics: prompt/generation token throughput, running/waiting requests, KV-cache usage, prefix-cache hit rate, TTFT, and TPOT. vLLM is primarily an inference/serving framework, so this style is intentionally serving-like rather than optimizer-step-like.
 - `stable-diffusion`: Diffusers/Accelerate-style step output with `step_loss`, lr, grad norm, sampled diffusion timestep, EMA decay, SNR gamma, noise offset, GPU memory, and epoch.
 
+Scenarios:
+
+- `normal`: the classic slackDL run with subtle warning and checkpoint-flavored incidents.
+- `llm-pretrain`: large-model pretraining flavor with higher token throughput, bigger memory numbers, loss scaling, and occasional OOM/overflow recovery logs.
+- `finetune`: adapter/fine-tuning flavor with eval metrics, accuracy/F1 movement, and overfitting warnings.
+- `diffusion`: image-generation training flavor with EMA, sample previews, diffusion timesteps, and latent-cache incidents.
+
 Examples:
 
 ```bash
 slackDL --log-style deepspeed --rainbow
 slackDL --log-style vllm
 slackDL --log-style stable-diffusion --log-every 50
+slackDL --scenario llm-pretrain --chaos-level 2 --rainbow
+slackDL --scenario finetune --seed 42 --step-delay 0
 ```
 
 Example output:

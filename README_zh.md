@@ -7,7 +7,7 @@
 
 一个为深度学习从业者、实验室选手和临时需要“电脑正在努力训练”的朋友准备的小工具。它不会帮你把 loss 真正降下去，但会认真地打印训练日志、滚动进度条、模拟保存 checkpoint，让屏幕看起来像是在跑一场很有前途的大实验。适合演示、测试日志解析，也适合在需要合理摸鱼的时候，给终端一点忙碌的尊严。
 
-`slackDL` 是一个小型 Python CLI 包，用来模拟深度学习训练日志。默认情况下，它可以打印 Hugging Face Transformers `Trainer` 风格的字典日志，也可以模拟 DeepSpeed、vLLM、Stable Diffusion/Diffusers 风格的指标输出，并通过 `tqdm` 进度条展示不断变化的 `sample/s` 吞吐量。
+`slackDL` 是一个小型 Python CLI 包，用来模拟深度学习训练日志。默认情况下，它可以打印 Hugging Face Transformers `Trainer` 风格的字典日志，也可以模拟 DeepSpeed、vLLM、Stable Diffusion/Diffusers 风格的指标输出，并通过 `tqdm` 进度条展示不断变化的 `sample/s` 吞吐量。v0.2 增加了可复现 seed、训练剧情场景，以及 loss spike、sharded checkpoint、scaler overflow、wandb retry 这类看起来很真实的小插曲。
 
 ## 安装
 
@@ -33,6 +33,9 @@ slackDL --steps 27161 --loss-start 1.5 --loss-min 0.1 --acc-start 0.5 --oscillat
 - `--speed-jitter`：每个样本的相对速度抖动，默认 `0.22`
 - `--log-every`：每 N 个样本打印一次日志，默认 `100`
 - `--log-style`：选择输出风格，可选 `trainer`、`deepspeed`、`vllm` 或 `stable-diffusion`；默认 `trainer`
+- `--scenario`：选择训练剧情，可选 `normal`、`llm-pretrain`、`finetune` 或 `diffusion`；默认 `normal`
+- `--chaos-level`：真实训练小插曲的密度，可选 `0`、`1` 或 `2`；默认 `1`
+- `--seed`：固定模拟指标和事件随机性，方便复现演示输出
 - `--save-every`：每 N 个样本模拟保存一次 checkpoint，默认 `1900`；使用 `0` 可禁用
 - `--save-delay`：模拟保存 checkpoint 时暂停的秒数，默认 `1.2`
 - `--project-name`：模拟 checkpoint 路径中的项目目录，默认 `project-name`
@@ -48,12 +51,21 @@ slackDL --steps 27161 --loss-start 1.5 --loss-min 0.1 --acc-start 0.5 --oscillat
 - `vllm`：受 vLLM 已记录 engine stats 和 Prometheus 指标启发的 serving 指标，包括 prompt/generation token 吞吐量、running/waiting requests、KV-cache 使用率、prefix-cache 命中率、TTFT 和 TPOT。vLLM 主要是推理/服务框架，因此这个风格刻意偏 serving，而不是 optimizer step。
 - `stable-diffusion`：Diffusers/Accelerate 风格的 step 输出，包括 `step_loss`、lr、grad norm、采样 diffusion timestep、EMA decay、SNR gamma、noise offset、GPU memory 和 epoch。
 
+训练剧情：
+
+- `normal`：经典 slackDL 运行方式，带少量 warning 和 checkpoint 味道的小插曲。
+- `llm-pretrain`：大模型预训练氛围，突出 token 吞吐、显存、loss scale，并偶尔出现 OOM/overflow 恢复日志。
+- `finetune`：微调氛围，突出 eval metrics、accuracy/F1 变化和轻微过拟合 warning。
+- `diffusion`：图像生成训练氛围，突出 EMA、sample preview、diffusion timestep 和 latent cache 事件。
+
 示例：
 
 ```bash
 slackDL --log-style deepspeed --rainbow
 slackDL --log-style vllm
 slackDL --log-style stable-diffusion --log-every 50
+slackDL --scenario llm-pretrain --chaos-level 2 --rainbow
+slackDL --scenario finetune --seed 42 --step-delay 0
 ```
 
 示例输出：

@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="slackDL",
-    version="0.1.0",
+    version="0.2.0",
     description="A CLI tool that simulates deep learning training progress.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",

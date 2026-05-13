@@ -2,8 +2,9 @@ import argparse
 import math
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
+from typing import Optional
 
 from tqdm import tqdm
 
@@ -19,6 +20,8 @@ RAINBOW_COLORS = (
 )
 RESET_COLOR = "\033[0m"
 LOG_STYLES = ("trainer", "deepspeed", "vllm", "stable-diffusion")
+SCENARIOS = ("normal", "llm-pretrain", "finetune", "diffusion")
+CHAOS_LEVELS = (0, 1, 2)
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,7 @@ class TrainingMetrics:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="slackDL",
-        description="Simulate a Hugging Face Transformers Trainer run.",
+        description="Simulate deep learning training logs with realistic training incidents.",
     )
     parser.add_argument("--steps", type=int, default=27161, help="Number of training samples to simulate.")
     parser.add_argument("--epochs", dest="steps", type=int, help=argparse.SUPPRESS)
@@ -105,6 +108,24 @@ def parse_args() -> argparse.Namespace:
         choices=LOG_STYLES,
         default="trainer",
         help="Choose a classic framework log style: trainer, deepspeed, vllm, or stable-diffusion.",
+    )
+    parser.add_argument(
+        "--scenario",
+        choices=SCENARIOS,
+        default="normal",
+        help="Choose a training storyline: normal, llm-pretrain, finetune, or diffusion.",
+    )
+    parser.add_argument(
+        "--chaos-level",
+        type=int,
+        choices=CHAOS_LEVELS,
+        default=1,
+        help="Density of realistic training incidents: 0 disables them, 1 is subtle, 2 is dramatic.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Seed the simulated metrics and incidents for reproducible demos.",
     )
     parser.add_argument(
         "--save-every",
@@ -159,6 +180,10 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--step-delay must be non-negative")
     if args.log_every <= 0:
         raise ValueError("--log-every must be greater than 0")
+    if args.scenario not in SCENARIOS:
+        raise ValueError(f"--scenario must be one of: {', '.join(SCENARIOS)}")
+    if args.chaos_level not in CHAOS_LEVELS:
+        raise ValueError("--chaos-level must be 0, 1, or 2")
     if args.save_every < 0:
         raise ValueError("--save-every must be non-negative")
     if args.save_delay < 0:
@@ -178,7 +203,10 @@ def simulated_metrics(
     loss_min: float,
     acc_start: float,
     oscillation: float,
+    scenario: str = "normal",
+    rng: Optional[random.Random] = None,
 ) -> TrainingMetrics:
+    rng = rng or random.Random()
     progress = step / steps
     convergence_point = max(1, int(steps * 0.75))
 
@@ -208,7 +236,7 @@ def simulated_metrics(
     cosine_decay = 0.5 * (1 + math.cos(math.pi * progress))
     learning_rate = 3e-4 * warmup_progress * max(0.08, cosine_decay)
     grad_norm = max(0.02, 1.8 * math.exp(-2.8 * progress) + 0.08 * math.sin(step * 0.019))
-    samples_per_second = max(0.25, 8.8 + 1.4 * math.sin(step * 0.031) + random.uniform(-0.55, 0.55))
+    samples_per_second = max(0.25, 8.8 + 1.4 * math.sin(step * 0.031) + rng.uniform(-0.55, 0.55))
     tokens_per_second = samples_per_second * (768 + 96 * math.sin(step * 0.014))
     requests_running = max(1, int(6 + 3 * math.sin(step * 0.021)))
     requests_waiting = max(0, int(4 + 4 * math.sin(step * 0.013 + 1.2)))
@@ -228,7 +256,7 @@ def simulated_metrics(
     noise_offset = max(0.0, 0.08 + 0.02 * math.sin(step * 0.012))
     snr_gamma = 5.0
 
-    return TrainingMetrics(
+    metrics = TrainingMetrics(
         loss=loss,
         val_loss=val_loss,
         lm_loss=lm_loss,
@@ -261,6 +289,55 @@ def simulated_metrics(
         noise_offset=noise_offset,
         snr_gamma=snr_gamma,
     )
+    return apply_scenario(metrics, scenario, progress, step)
+
+
+def apply_scenario(metrics: TrainingMetrics, scenario: str, progress: float, step: int) -> TrainingMetrics:
+    if scenario == "llm-pretrain":
+        scale_wave = 1.0 + 0.05 * math.sin(step * 0.009)
+        return replace(
+            metrics,
+            loss=max(0.02, metrics.loss * 1.08),
+            val_loss=max(0.02, metrics.val_loss * 1.1),
+            lm_loss=max(0.02, metrics.lm_loss * 1.14),
+            aux_loss=max(0.001, metrics.aux_loss * 0.75),
+            perplexity=min(999.0, metrics.perplexity * 1.16),
+            grad_norm=max(0.03, metrics.grad_norm * 1.35),
+            gpu_memory_gb=min(79.0, 42.0 + 27.0 * progress + 2.4 * math.sin(step * 0.013)),
+            samples_per_second=max(0.2, metrics.samples_per_second * 0.34 * scale_wave),
+            tokens_per_second=max(600.0, metrics.tokens_per_second * 7.5 * scale_wave),
+            loss_scale=65536.0 if progress < 0.45 else metrics.loss_scale,
+        )
+    if scenario == "finetune":
+        overfit_gap = max(0.0, progress - 0.62) * 0.26
+        accuracy = min(0.995, metrics.accuracy + 0.025 * (1 - math.exp(-5 * progress)))
+        precision = min(0.998, metrics.precision + 0.018)
+        recall = min(0.998, metrics.recall + 0.012)
+        f1 = 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
+        return replace(
+            metrics,
+            val_loss=metrics.val_loss + overfit_gap,
+            accuracy=accuracy,
+            auc=min(0.999, metrics.auc + 0.018),
+            precision=precision,
+            recall=recall,
+            f1=min(0.998, f1),
+            samples_per_second=max(0.4, metrics.samples_per_second * 0.78),
+            tokens_per_second=max(250.0, metrics.tokens_per_second * 0.7),
+            gpu_memory_gb=min(79.0, metrics.gpu_memory_gb + 3.0),
+        )
+    if scenario == "diffusion":
+        return replace(
+            metrics,
+            loss=max(0.01, metrics.loss * (0.92 + 0.04 * math.sin(step * 0.021))),
+            val_loss=max(0.01, metrics.val_loss * 0.95),
+            samples_per_second=max(0.2, metrics.samples_per_second * 0.42),
+            tokens_per_second=max(128.0, metrics.tokens_per_second * 0.25),
+            gpu_memory_gb=min(79.0, 27.0 + 22.0 * progress + 1.9 * math.sin(step * 0.018)),
+            ema_decay=min(0.99995, 0.996 + 0.0038 * progress),
+            noise_offset=max(0.0, metrics.noise_offset + 0.015 * math.sin(step * 0.029)),
+        )
+    return metrics
 
 
 def colorize(text: str, color_index: int, enabled: bool) -> str:
@@ -345,21 +422,128 @@ def format_log(style: str, step: int, steps: int, metrics: TrainingMetrics, rain
     return format_trainer_log(step, steps, metrics, rainbow)
 
 
+def format_event(level: str, message: str, rainbow: bool) -> str:
+    color_index = {"INFO": 5, "WARNING": 1, "ERROR": 0}.get(level, 2)
+    return f"{colorize(level, color_index, rainbow)} {message}"
+
+
+def training_event(
+    step: int,
+    steps: int,
+    scenario: str,
+    chaos_level: int,
+    metrics: TrainingMetrics,
+    rng: random.Random,
+    rainbow: bool = False,
+) -> Optional[str]:
+    if chaos_level == 0:
+        return None
+
+    probability = 0.025 if chaos_level == 1 else 0.2
+    forced_small_demo = chaos_level == 2 and steps <= 5 and step in (2, steps)
+    if not forced_small_demo and rng.random() > probability:
+        return None
+
+    common_events = [
+        (
+            "WARNING",
+            f"trainer.py:{step}: dataloader worker heartbeat delayed; keeping batch queue warm",
+        ),
+        (
+            "INFO",
+            f"checkpointing.py:{step}: saving sharded optimizer state part {rng.randint(1, 8)}/8",
+        ),
+        (
+            "WARNING",
+            f"wandb: network timeout while syncing step {step}, retrying in {rng.randint(3, 9)}s",
+        ),
+    ]
+    scenario_events = {
+        "normal": [
+            (
+                "INFO",
+                f"eval loop: val_loss={metrics.val_loss:.4f}, accuracy={metrics.accuracy:.4f}, best checkpoint unchanged",
+            ),
+            (
+                "WARNING",
+                f"scheduler: lr plateau detected near {metrics.learning_rate:.2e}; cosine decay continues",
+            ),
+        ],
+        "llm-pretrain": [
+            (
+                "WARNING",
+                f"cuda OOM at microbatch boundary; reducing activation checkpoint window, gpu_mem={metrics.gpu_memory_gb:.1f}GB",
+            ),
+            (
+                "WARNING",
+                f"fp16 overflow detected; skipping optimizer step and lowering loss_scale to {metrics.loss_scale / 2:.0f}",
+            ),
+            (
+                "INFO",
+                f"tokens/sec recovered to {metrics.tokens_per_second:.1f}; sequence packing efficiency stable",
+            ),
+        ],
+        "finetune": [
+            (
+                "WARNING",
+                f"eval_loss moved above train_loss by {metrics.val_loss - metrics.loss:.4f}; possible overfit smell",
+            ),
+            (
+                "INFO",
+                f"eval metrics jump: accuracy={metrics.accuracy:.4f}, f1={metrics.f1:.4f}; keeping adapter weights",
+            ),
+        ],
+        "diffusion": [
+            (
+                "INFO",
+                f"sample preview queued at diffusion timestep {metrics.diffusion_timestep}; EMA weights look stable",
+            ),
+            (
+                "WARNING",
+                f"latent cache miss burst; gpu_mem={metrics.gpu_memory_gb:.1f}GB, retrying dataloader prefetch",
+            ),
+        ],
+    }
+    dramatic_events = [
+        (
+            "ERROR",
+            f"NaN detected in grad_norm={metrics.grad_norm:.4f}; skipped step {step} and restored previous scaler state",
+        ),
+        (
+            "WARNING",
+            f"loss spike observed: loss={metrics.loss + rng.uniform(0.4, 1.8):.4f}; gradient clipping engaged",
+        ),
+    ]
+
+    event_pool = common_events + scenario_events.get(scenario, [])
+    if chaos_level == 2:
+        event_pool += dramatic_events
+    level, message = rng.choice(event_pool)
+    return format_event(level, message, rainbow)
+
+
 def checkpoint_path(project_name: str, run_name: str, step: int) -> str:
     return str(PurePosixPath(project_name) / run_name / f"checkpoint-{step}" / "checkpoint.pth")
 
 
-def simulated_step_delay(step: int, base_delay: float, speed_jitter: float) -> float:
+def simulated_step_delay(
+    step: int,
+    base_delay: float,
+    speed_jitter: float,
+    rng: Optional[random.Random] = None,
+) -> float:
     if base_delay == 0:
         return 0
+    rng = rng or random.Random()
     wave = 0.14 * math.sin(step * 0.037) + 0.08 * math.sin(step * 0.011)
-    noise = random.uniform(-speed_jitter, speed_jitter)
+    noise = rng.uniform(-speed_jitter, speed_jitter)
     multiplier = max(0.25, 1 + wave + noise)
     return base_delay * multiplier
 
 
 def run_training(args: argparse.Namespace) -> None:
     validate_args(args)
+    rng = random.Random(args.seed)
 
     progress_bar = tqdm(
         range(1, args.steps + 1),
@@ -376,10 +560,15 @@ def run_training(args: argparse.Namespace) -> None:
             loss_min=args.loss_min,
             acc_start=args.acc_start,
             oscillation=args.oscillation,
+            scenario=args.scenario,
+            rng=rng,
         )
-        time.sleep(simulated_step_delay(step, args.step_delay, args.speed_jitter))
+        time.sleep(simulated_step_delay(step, args.step_delay, args.speed_jitter, rng))
         if step == 1 or step % args.log_every == 0 or step == args.steps:
             tqdm.write(format_log(args.log_style, step, args.steps, metrics, args.rainbow))
+        event = training_event(step, args.steps, args.scenario, args.chaos_level, metrics, rng, args.rainbow)
+        if event:
+            tqdm.write(event)
         if args.save_every and step % args.save_every == 0:
             time.sleep(args.save_delay)
             tqdm.write(f"Saving model checkpoint to {checkpoint_path(args.project_name, args.run_name, step)}")
