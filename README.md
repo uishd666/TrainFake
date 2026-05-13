@@ -4,6 +4,7 @@
 
 ![slackDL hero](assets/readme-hero.png)
 
+A little tool for deep learning professionals, lab enthusiasts, and anyone who needs to make it look like their computer is “hard at work training” for a moment. It won’t actually help you reduce your loss, but it will diligently print training logs, display a scrolling progress bar, and simulate checkpoint saves—making your screen look like it’s running a promising large-scale experiment. It’s perfect for demos, parsing test logs, or simply giving your terminal a bit of “busy dignity” when you need a reasonable excuse to slack off.
 
 `slackDL` is a small Python CLI package that simulates deep learning training logs. It can print Hugging Face Transformers `Trainer` dictionaries by default, or mimic DeepSpeed, vLLM, and Stable Diffusion/Diffusers-style metric output while showing a `tqdm` progress bar with changing `sample/s` throughput.
 
