@@ -1,34 +1,15 @@
 # slackDL
 
+[Chinese README](README_zh.md)
+
 `slackDL` is a small Python CLI package that simulates deep learning training logs. It can print Hugging Face Transformers `Trainer` dictionaries by default, or mimic DeepSpeed, vLLM, and Stable Diffusion/Diffusers-style metric output while showing a `tqdm` progress bar with changing `sample/s` throughput.
-
-After installation, the command is:
-
-```bash
-slackDL
-```
 
 ## Install
 
-For local development:
-
 ```bash
 python3 -m pip install .
-```
-
-Then run:
-
-```bash
 slackDL
 ```
-
-To publish this as something installable with:
-
-```bash
-sudo apt install slackDL
-```
-
-you will also need to build and publish a Debian package to an APT repository. This project contains the Python package metadata and CLI entry point needed by that package, but APT installation requires Debian packaging infrastructure in addition to these Python files.
 
 ## Usage
 
@@ -78,13 +59,6 @@ Example output:
 {'loss': 0.6365, 'grad_norm': 0.5202, 'learning_rate': 0.00015, 'epoch': 0.5}
 Saving model checkpoint to project-name/run-name/checkpoint-1900/checkpoint.pth
 {'loss': 0.1559, 'grad_norm': 0.2431, 'learning_rate': 4.3933982822017885e-05, 'epoch': 0.75}
-```
-
-## Build
-
-```bash
-python3 -m pip install build
-python3 -m build
 ```
 
 ## License
