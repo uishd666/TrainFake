@@ -61,7 +61,7 @@ class RunSpec:
     log_every: int = 12
     save_every: int = 80
     save_delay: float = 0.15
-    project_name: str = "slackdl"
+    project_name: str = "trainfake"
     run_name: str = "cinematic-run"
     loss_start: float = 1.5
     loss_min: float = 0.1
@@ -258,8 +258,8 @@ class TrainingMetrics:
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="slackDL",
-        description="Run cinematic terminal simulations of deep learning jobs.",
+        prog="trainfake",
+        description="Run cinematic AI training logs for demos, tests, teaching, and suspiciously serious terminals.",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -780,7 +780,7 @@ def load_run_spec(path: str) -> RunSpec:
     stages = tuple(parse_stage(stage) for stage in raw_stages) if raw_stages else default_stages()
     spec = RunSpec(
         name=str(data.get("name", "custom-run")),
-        description=str(data.get("description", "Custom slackDL cinematic run.")),
+        description=str(data.get("description", "Custom TrainFake cinematic run.")),
         kind=str(data.get("kind", "custom")),
         log_style=str(data.get("log_style", "trainer")),
         seed=data.get("seed", 42),
@@ -790,7 +790,7 @@ def load_run_spec(path: str) -> RunSpec:
         log_every=int(data.get("log_every", 12)),
         save_every=int(data.get("save_every", 80)),
         save_delay=float(data.get("save_delay", 0.15)),
-        project_name=str(data.get("project_name", "slackdl")),
+        project_name=str(data.get("project_name", "trainfake")),
         run_name=str(data.get("run_name", "custom-run")),
         loss_start=float(data.get("loss_start", 1.5)),
         loss_min=float(data.get("loss_min", 0.1)),
@@ -810,7 +810,7 @@ def resolve_run_spec(args: argparse.Namespace) -> RunSpec:
     else:
         preset_name = args.preset or "llama-70b-pretrain"
         if preset_name not in PRESETS:
-            raise ValueError(f"unknown preset {preset_name!r}; run `slackDL presets` to see available presets")
+            raise ValueError(f"unknown preset {preset_name!r}; run `trainfake presets` to see available presets")
         spec = PRESETS[preset_name]
     overrides: dict[str, Any] = {}
     for name in ("steps", "step_delay", "seed", "log_every", "save_every"):
@@ -838,7 +838,7 @@ def stage_banner(stage: StageSpec) -> str:
 
 
 def list_presets(console: Console) -> None:
-    table = Table(title="slackDL cinematic presets")
+    table = Table(title="TrainFake cinematic presets")
     table.add_column("preset", style="cyan", no_wrap=True)
     table.add_column("kind", style="magenta")
     table.add_column("steps", justify="right")
@@ -873,7 +873,7 @@ def run_cinematic(spec: RunSpec, console: Optional[Console] = None, rainbow: boo
     current_stage_name: Optional[str] = None
     start_time = time.monotonic()
 
-    console.rule(f"[bold cyan]slackDL run: {spec.name}")
+    console.rule(f"[bold cyan]TrainFake run: {spec.name}")
     console.print(f"[dim]{spec.description}[/dim]")
     console.print(
         f"INFO launcher.py: seed={spec.seed} log_style={spec.log_style} project={spec.project_name}/{spec.run_name}"
@@ -941,17 +941,17 @@ def run_cinematic(spec: RunSpec, console: Optional[Console] = None, rainbow: boo
 
 
 def print_default_help(console: Console) -> None:
-    console.print("[bold cyan]slackDL[/bold cyan] is now preset-first.")
+    console.print("[bold cyan]TrainFake[/bold cyan] is preset-first.")
     console.print("Try:")
-    console.print("  slackDL presets")
-    console.print("  slackDL run llama-70b-pretrain --step-delay 0")
-    console.print("  slackDL run --config examples/my-run.yaml")
+    console.print("  trainfake presets")
+    console.print("  trainfake run llama-70b-pretrain --step-delay 0")
+    console.print("  trainfake run --config tests/fixtures/sample_run.yaml")
 
 
 def print_legacy_hint(console: Console) -> None:
-    console.print("[bold yellow]slackDL changed its CLI in v1-style cinematic mode.[/bold yellow]")
-    console.print("Use `slackDL presets` or `slackDL run <preset>` instead of legacy top-level flags.")
-    console.print("Example: `slackDL run bert-finetune --step-delay 0`")
+    console.print("[bold yellow]TrainFake uses a preset-first CLI.[/bold yellow]")
+    console.print("Use `trainfake presets` or `trainfake run <preset>` instead of legacy top-level flags.")
+    console.print("Example: `trainfake run bert-finetune --step-delay 0`")
 
 
 def main() -> None:

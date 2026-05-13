@@ -136,7 +136,7 @@ class CliSmokeTests(unittest.TestCase):
 
     def test_builtin_run_cli_smoke(self):
         result = self.run_cli("run", "boss-is-watching", "--step-delay", "0", "--steps", "5", "--save-every", "0")
-        self.assertIn("slackDL run: boss-is-watching", result.stdout)
+        self.assertIn("TrainFake run: boss-is-watching", result.stdout)
         self.assertIn("summary: boss-is-watching", result.stdout)
 
     def test_config_run_cli_smoke(self):
@@ -147,14 +147,15 @@ class CliSmokeTests(unittest.TestCase):
             "--step-delay",
             "0",
         )
-        self.assertIn("slackDL run: fixture-run", result.stdout)
+        self.assertIn("TrainFake run: fixture-run", result.stdout)
         self.assertIn("summary: fixture-run", result.stdout)
 
     def test_legacy_flags_print_migration_hint(self):
         command = [sys.executable, "-m", "simulate_train.main", "--steps", "3"]
         result = subprocess.run(command, text=True, capture_output=True)
         self.assertEqual(result.returncode, 2)
-        self.assertIn("changed its CLI", result.stdout)
+        self.assertIn("TrainFake uses a preset-first CLI", result.stdout)
+        self.assertIn("trainfake run", result.stdout)
 
 
 if __name__ == "__main__":

@@ -2,12 +2,12 @@ from setuptools import find_packages, setup
 
 
 setup(
-    name="slackDL",
+    name="trainfake",
     version="1.0.0",
-    description="A preset-first terminal simulator for cinematic deep learning runs.",
+    description="Cinematic AI training logs for demos, tests, teaching, and suspiciously serious terminals.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
-    author="slackDL contributors",
+    author="TrainFake contributors",
     license="MIT",
     packages=find_packages(),
     python_requires=">=3.8",
@@ -17,7 +17,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "slackDL=simulate_train.main:main",
+            "trainfake=simulate_train.main:main",
         ],
     },
     classifiers=[

@@ -1,12 +1,14 @@
-# slackDL
+# TrainFake
 
 [English README](README.md)
 
-![slackDL hero](assets/readme-hero.png)
+![TrainFake hero](assets/readme-hero.png)
 
-`slackDL` 是一个 preset-first 的终端深度学习运行模拟器。它不会真正训练模型，但会像一场真实训练任务一样，在终端里经历环境扫描、warmup、主训练循环、事故窗口、恢复、eval、checkpoint 和 summary。它适合演示、日志解析测试、教学，也适合在需要让终端看起来非常认真时，给屏幕一点可信的训练现场感。
+> 可信 AI 训练日志生成器：给演示、教学、测试和认真摸鱼一个完整终端现场。
 
-v1 风格重设计后，`slackDL` 不再主打几十个散落参数，而是提供内置 preset 和 YAML 剧本：你选择一个运行场景，它负责把日志节奏、指标变化、事件和收尾报告串成一场完整的终端训练大片。
+`TrainFake` 是一个 preset-first 的终端 AI 训练运行模拟器。它不会真正训练模型，但会像一场真实深度学习任务一样，在终端里经历环境扫描、warmup、主训练循环、事故窗口、恢复、eval、checkpoint 和 summary。
+
+它适合演示、日志解析测试、教学、截图、发布宣传，也适合在需要让终端看起来非常认真时，给屏幕一点可信的训练现场感。CLI 命令是 `trainfake`。
 
 ## 特性
 
@@ -35,28 +37,28 @@ python3 -m pip install -e .
 查看内置 preset：
 
 ```bash
-slackDL presets
+trainfake presets
 ```
 
 运行一个大模型预训练现场：
 
 ```bash
-slackDL run llama-70b-pretrain
+trainfake run llama-70b-pretrain
 ```
 
 快速演示，不等待真实延迟：
 
 ```bash
-slackDL run boss-is-watching --step-delay 0
+trainfake run boss-is-watching --step-delay 0
 ```
 
 使用 YAML 剧本：
 
 ```bash
-slackDL run --config tests/fixtures/sample_run.yaml
+trainfake run --config tests/fixtures/sample_run.yaml
 ```
 
-直接运行 `slackDL` 会显示推荐命令，不会自动启动一场很长的训练。
+直接运行 `trainfake` 会显示推荐命令，不会自动启动一场很长的训练。
 
 ## 内置 Preset
 
@@ -72,9 +74,9 @@ slackDL run --config tests/fixtures/sample_run.yaml
 ## 命令
 
 ```bash
-slackDL presets
-slackDL run <preset>
-slackDL run --config path/to/run.yaml
+trainfake presets
+trainfake run <preset>
+trainfake run --config path/to/run.yaml
 ```
 
 `run` 支持少量覆盖参数：
@@ -88,7 +90,7 @@ slackDL run --config path/to/run.yaml
 | `--save-every` | 覆盖 checkpoint 频率，`0` 表示禁用。 |
 | `--rainbow` | 为日志字段启用 ANSI 彩色输出。 |
 
-旧版顶层参数如 `--scenario`、`--log-style`、`--steps` 不再是主入口。直接使用旧参数时，CLI 会给出迁移提示，推荐改用 `slackDL run <preset>` 或 `slackDL run --config ...`。
+旧版顶层参数如 `--scenario`、`--log-style`、`--steps` 不再是主入口。直接使用旧参数时，CLI 会给出迁移提示，推荐改用 `trainfake run <preset>` 或 `trainfake run --config ...`。
 
 ## YAML 剧本
 
@@ -167,8 +169,8 @@ python3 -m unittest discover -s tests
 CLI smoke test：
 
 ```bash
-python3 -m simulate_train.main presets
-python3 -m simulate_train.main run boss-is-watching --step-delay 0 --steps 5 --save-every 0
+trainfake presets
+trainfake run boss-is-watching --step-delay 0 --steps 5 --save-every 0
 ```
 
 ## 许可证

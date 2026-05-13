@@ -1,12 +1,14 @@
-# slackDL
+# TrainFake
 
 [中文 README](README_zh.md)
 
-![slackDL hero](assets/readme-hero.png)
+![TrainFake hero](assets/readme-hero.png)
 
-`slackDL` is a preset-first terminal simulator for deep learning runs. It does not train a real model, but it stages a believable training session with environment scans, warmup, the main loop, incident windows, recovery logs, eval-flavored metrics, checkpoints, and a final summary table.
+> Cinematic AI training logs for demos, tests, teaching, and suspiciously serious terminals.
 
-After the v1-style redesign, `slackDL` is no longer centered on dozens of scattered flags. You pick a built-in preset or provide a YAML run script, and the CLI turns it into a cohesive terminal training scene.
+`TrainFake` is a preset-first terminal simulator for believable AI training runs. It does not train a real model, but it stages a complete deep learning session with environment scans, warmup, the main loop, incident windows, recovery logs, eval-flavored metrics, checkpoints, and a final summary table.
+
+It is built for demos, log parser tests, teaching, screenshots, launch posts, and any moment when a terminal needs to look convincingly busy without touching a GPU. The CLI command is `trainfake`.
 
 ## Features
 
@@ -35,28 +37,28 @@ python3 -m pip install -e .
 List the built-in presets:
 
 ```bash
-slackDL presets
+trainfake presets
 ```
 
 Run an LLM pretraining scene:
 
 ```bash
-slackDL run llama-70b-pretrain
+trainfake run llama-70b-pretrain
 ```
 
 Run a fast demo with no real delay:
 
 ```bash
-slackDL run boss-is-watching --step-delay 0
+trainfake run boss-is-watching --step-delay 0
 ```
 
 Run from a YAML script:
 
 ```bash
-slackDL run --config tests/fixtures/sample_run.yaml
+trainfake run --config tests/fixtures/sample_run.yaml
 ```
 
-Running `slackDL` with no subcommand prints recommended commands instead of starting a long default run.
+Running `trainfake` with no subcommand prints recommended commands instead of starting a long default run.
 
 ## Built-in Presets
 
@@ -72,9 +74,9 @@ Running `slackDL` with no subcommand prints recommended commands instead of star
 ## Commands
 
 ```bash
-slackDL presets
-slackDL run <preset>
-slackDL run --config path/to/run.yaml
+trainfake presets
+trainfake run <preset>
+trainfake run --config path/to/run.yaml
 ```
 
 `run` supports a small set of overrides:
@@ -88,7 +90,7 @@ slackDL run --config path/to/run.yaml
 | `--save-every` | Override checkpoint cadence. Use `0` to disable. |
 | `--rainbow` | Enable ANSI colors inside log fields. |
 
-Legacy top-level flags such as `--scenario`, `--log-style`, and `--steps` are no longer the primary interface. Use `slackDL run <preset>` or `slackDL run --config ...` instead.
+Legacy top-level flags such as `--scenario`, `--log-style`, and `--steps` are no longer the primary interface. Use `trainfake run <preset>` or `trainfake run --config ...` instead.
 
 ## YAML Runs
 
@@ -167,8 +169,8 @@ python3 -m unittest discover -s tests
 Run CLI smoke checks:
 
 ```bash
-python3 -m simulate_train.main presets
-python3 -m simulate_train.main run boss-is-watching --step-delay 0 --steps 5 --save-every 0
+trainfake presets
+trainfake run boss-is-watching --step-delay 0 --steps 5 --save-every 0
 ```
 
 ## License
