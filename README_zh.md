@@ -4,78 +4,171 @@
 
 ![slackDL hero](assets/readme-hero.png)
 
+`slackDL` 是一个 preset-first 的终端深度学习运行模拟器。它不会真正训练模型，但会像一场真实训练任务一样，在终端里经历环境扫描、warmup、主训练循环、事故窗口、恢复、eval、checkpoint 和 summary。它适合演示、日志解析测试、教学，也适合在需要让终端看起来非常认真时，给屏幕一点可信的训练现场感。
 
-一个为深度学习从业者、实验室选手和临时需要“电脑正在努力训练”的朋友准备的小工具。它不会帮你把 loss 真正降下去，但会认真地打印训练日志、滚动进度条、模拟保存 checkpoint，让屏幕看起来像是在跑一场很有前途的大实验。适合演示、测试日志解析，也适合在需要合理摸鱼的时候，给终端一点忙碌的尊严。
+v1 风格重设计后，`slackDL` 不再主打几十个散落参数，而是提供内置 preset 和 YAML 剧本：你选择一个运行场景，它负责把日志节奏、指标变化、事件和收尾报告串成一场完整的终端训练大片。
 
-`slackDL` 是一个小型 Python CLI 包，用来模拟深度学习训练日志。默认情况下，它可以打印 Hugging Face Transformers `Trainer` 风格的字典日志，也可以模拟 DeepSpeed、vLLM、Stable Diffusion/Diffusers 风格的指标输出，并通过 `tqdm` 进度条展示不断变化的 `sample/s` 吞吐量。v0.2 增加了可复现 seed、训练剧情场景，以及 loss spike、sharded checkpoint、scaler overflow、wandb retry 这类看起来很真实的小插曲。
+## 特性
+
+- 内置多种可信训练/服务场景：LLM 预训练、Diffusers LoRA、vLLM 上线彩排、BERT 微调和短平快演示。
+- 支持 YAML 剧本，自定义阶段、日志风格、事件、checkpoint 频率和随机种子。
+- 输出 Hugging Face `Trainer`、DeepSpeed、vLLM、Stable Diffusion/Diffusers 风格日志。
+- 支持可复现 seed、彩色日志字段、快速零延迟演示和最终 summary 表格。
+- 默认不会执行真实训练，也不会下载模型或占用 GPU。
 
 ## 安装
 
+需要 Python 3.8 或更高版本。
+
 ```bash
 python3 -m pip install .
-slackDL
 ```
 
-## 使用
+开发模式安装：
 
 ```bash
-slackDL --steps 27161 --loss-start 1.5 --loss-min 0.1 --acc-start 0.5 --oscillation 0.05 --step-delay 0.12 --log-every 100 --save-every 100 --project-name project-name --run-name run-name
+python3 -m pip install -e .
 ```
 
-参数：
+## 快速开始
 
-- `--steps`：要模拟的训练样本数，默认 `27161`
-- `--loss-start`：初始 loss，默认 `1.5`
-- `--loss-min`：进入震荡前的最小 loss，默认 `0.1`
-- `--acc-start`：初始 accuracy，默认 `0.5`
-- `--oscillation`：收敛后的 loss 震荡幅度，默认 `0.05`
-- `--step-delay`：每个样本的基础等待秒数，默认 `0.12`
-- `--speed-jitter`：每个样本的相对速度抖动，默认 `0.22`
-- `--log-every`：每 N 个样本打印一次日志，默认 `100`
-- `--log-style`：选择输出风格，可选 `trainer`、`deepspeed`、`vllm` 或 `stable-diffusion`；默认 `trainer`
-- `--scenario`：选择训练剧情，可选 `normal`、`llm-pretrain`、`finetune` 或 `diffusion`；默认 `normal`
-- `--chaos-level`：真实训练小插曲的密度，可选 `0`、`1` 或 `2`；默认 `1`
-- `--seed`：固定模拟指标和事件随机性，方便复现演示输出
-- `--save-every`：每 N 个样本模拟保存一次 checkpoint，默认 `1900`；使用 `0` 可禁用
-- `--save-delay`：模拟保存 checkpoint 时暂停的秒数，默认 `1.2`
-- `--project-name`：模拟 checkpoint 路径中的项目目录，默认 `project-name`
-- `--run-name`：模拟 checkpoint 路径中的运行目录，默认 `run-name`
-- `--rainbow`：为进度条和日志字段启用彩色 ANSI 输出
-
-为了兼容旧用法，`--epochs` 和 `--epoch-delay` 仍然可以作为 `--steps` 和 `--step-delay` 的别名使用。
-
-日志风格：
-
-- `trainer`：Hugging Face `Trainer` 风格的指标字典，包含 `loss`、`grad_norm`、`learning_rate` 和 `epoch`。
-- `deepspeed`：带有 wall-clock/profiler 味道的输出，包括跳过的优化器更新、momentum、fp16 `loss_scale`、samples/sec、forward/backward/allreduce 耗时，以及优化器 step 延迟。
-- `vllm`：受 vLLM 已记录 engine stats 和 Prometheus 指标启发的 serving 指标，包括 prompt/generation token 吞吐量、running/waiting requests、KV-cache 使用率、prefix-cache 命中率、TTFT 和 TPOT。vLLM 主要是推理/服务框架，因此这个风格刻意偏 serving，而不是 optimizer step。
-- `stable-diffusion`：Diffusers/Accelerate 风格的 step 输出，包括 `step_loss`、lr、grad norm、采样 diffusion timestep、EMA decay、SNR gamma、noise offset、GPU memory 和 epoch。
-
-训练剧情：
-
-- `normal`：经典 slackDL 运行方式，带少量 warning 和 checkpoint 味道的小插曲。
-- `llm-pretrain`：大模型预训练氛围，突出 token 吞吐、显存、loss scale，并偶尔出现 OOM/overflow 恢复日志。
-- `finetune`：微调氛围，突出 eval metrics、accuracy/F1 变化和轻微过拟合 warning。
-- `diffusion`：图像生成训练氛围，突出 EMA、sample preview、diffusion timestep 和 latent cache 事件。
-
-示例：
+查看内置 preset：
 
 ```bash
-slackDL --log-style deepspeed --rainbow
-slackDL --log-style vllm
-slackDL --log-style stable-diffusion --log-every 50
-slackDL --scenario llm-pretrain --chaos-level 2 --rainbow
-slackDL --scenario finetune --seed 42 --step-delay 0
+slackDL presets
 ```
 
-示例输出：
+运行一个大模型预训练现场：
 
-```text
- 12%|█████████████████▉                        | 3236/27161 [06:27<46:47,  8.52sample/s]
-{'loss': 1.1071, 'grad_norm': 0.9592, 'learning_rate': 0.00025606601717798213, 'epoch': 0.25}
-{'loss': 0.6365, 'grad_norm': 0.5202, 'learning_rate': 0.00015, 'epoch': 0.5}
-Saving model checkpoint to project-name/run-name/checkpoint-1900/checkpoint.pth
-{'loss': 0.1559, 'grad_norm': 0.2431, 'learning_rate': 4.3933982822017885e-05, 'epoch': 0.75}
+```bash
+slackDL run llama-70b-pretrain
+```
+
+快速演示，不等待真实延迟：
+
+```bash
+slackDL run boss-is-watching --step-delay 0
+```
+
+使用 YAML 剧本：
+
+```bash
+slackDL run --config tests/fixtures/sample_run.yaml
+```
+
+直接运行 `slackDL` 会显示推荐命令，不会自动启动一场很长的训练。
+
+## 内置 Preset
+
+| Preset | 适合场景 |
+| --- | --- |
+| `llama-70b-pretrain` | DeepSpeed 风格的大模型预训练，包含 warmup、loss scale、NCCL/allreduce 氛围和 sharded checkpoint。 |
+| `sdxl-lora` | Stable Diffusion/Diffusers 风格的 LoRA 训练，包含 EMA、diffusion timestep、latent cache 和 sample preview 味道。 |
+| `vllm-launch` | vLLM serving 风格的上线彩排，突出请求队列、KV cache、TTFT、TPOT 和吞吐恢复。 |
+| `bert-finetune` | 经典监督微调，突出 eval metrics、accuracy/F1 和轻微 overfit warning。 |
+| `boss-is-watching` | 短平快但足够可信的“终端正在认真训练”场景。 |
+| `deadline-finetune` | deadline 前的 adapter 微调现场，玩梗克制，日志仍保持真实感。 |
+
+## 命令
+
+```bash
+slackDL presets
+slackDL run <preset>
+slackDL run --config path/to/run.yaml
+```
+
+`run` 支持少量覆盖参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `--steps` | 覆盖总模拟 step 数。 |
+| `--step-delay` | 覆盖每 step 的基础等待时间，演示时可设为 `0`。 |
+| `--seed` | 覆盖随机种子。 |
+| `--log-every` | 覆盖指标日志频率。 |
+| `--save-every` | 覆盖 checkpoint 频率，`0` 表示禁用。 |
+| `--rainbow` | 为日志字段启用 ANSI 彩色输出。 |
+
+旧版顶层参数如 `--scenario`、`--log-style`、`--steps` 不再是主入口。直接使用旧参数时，CLI 会给出迁移提示，推荐改用 `slackDL run <preset>` 或 `slackDL run --config ...`。
+
+## YAML 剧本
+
+YAML 剧本可以定义一次自定义训练现场：
+
+```yaml
+name: office-demo
+description: A compact cinematic run for a terminal demo.
+log_style: deepspeed
+seed: 42
+steps: 120
+step_delay: 0.02
+log_every: 6
+save_every: 30
+project_name: demo
+run_name: office-demo-rank0
+stages:
+  - name: bootstrap
+    start_pct: 0.0
+    end_pct: 0.1
+    scenario: llm-pretrain
+    chaos_level: 0
+  - name: train
+    start_pct: 0.1
+    end_pct: 0.75
+    scenario: llm-pretrain
+    chaos_level: 1
+  - name: incident
+    start_pct: 0.75
+    end_pct: 0.9
+    scenario: llm-pretrain
+    chaos_level: 2
+    events:
+      - level: WARNING
+        message: "NCCL watchdog noticed a slow allreduce; rank0 keeps the job alive"
+        at_pct: 0.8
+  - name: summary
+    start_pct: 0.9
+    end_pct: 1.0
+    scenario: llm-pretrain
+    chaos_level: 0
+```
+
+支持的顶层字段包括：`name`、`description`、`log_style`、`seed`、`steps`、`step_delay`、`speed_jitter`、`log_every`、`save_every`、`save_delay`、`project_name`、`run_name`、`loss_start`、`loss_min`、`acc_start`、`oscillation`、`stages`。
+
+`stages` 支持 `name`、`start_pct`、`end_pct`、`scenario`、`chaos_level`、`events`。事件支持 `level`、`message` 和 `at_pct`。
+
+## 日志风格
+
+- `trainer`：Hugging Face `Trainer` 风格指标字典。
+- `deepspeed`：DeepSpeed wall-clock/profiler 风格日志。
+- `vllm`：vLLM serving metrics 风格日志。
+- `stable-diffusion`：Diffusers/Accelerate 风格 step 日志。
+
+## 训练阶段
+
+一次 cinematic run 可以包含这些阶段：
+
+- `bootstrap`：启动、环境扫描、seed 和项目路径信息。
+- `warmup`：学习率 warmup、吞吐爬升。
+- `train`：主训练循环。
+- `incident`：OOM、overflow、NCCL、wandb retry、loss spike 等事故窗口。
+- `recovery`：scaler、checkpoint、吞吐和队列恢复。
+- `eval`：验证集指标和 best checkpoint 判断。
+- `checkpoint`：checkpoint 合并或保存。
+- `summary`：运行结束表格，展示最终 loss、事故次数、恢复次数和 checkpoint。
+
+## 开发
+
+运行测试：
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+CLI smoke test：
+
+```bash
+python3 -m simulate_train.main presets
+python3 -m simulate_train.main run boss-is-watching --step-delay 0 --steps 5 --save-every 0
 ```
 
 ## 许可证

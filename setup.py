@@ -3,8 +3,8 @@ from setuptools import find_packages, setup
 
 setup(
     name="slackDL",
-    version="0.2.0",
-    description="A CLI tool that simulates deep learning training progress.",
+    version="1.0.0",
+    description="A preset-first terminal simulator for cinematic deep learning runs.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     author="slackDL contributors",
@@ -12,7 +12,8 @@ setup(
     packages=find_packages(),
     python_requires=">=3.8",
     install_requires=[
-        "tqdm>=4.66.0",
+        "PyYAML>=6.0.0",
+        "rich>=13.7.0",
     ],
     entry_points={
         "console_scripts": [

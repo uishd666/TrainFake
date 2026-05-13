@@ -1,47 +1,46 @@
-import argparse
+import io
 import random
 import subprocess
 import sys
 import unittest
+from pathlib import Path
+
+from rich.console import Console
 
 from simulate_train import main as slack_main
 
 
-def make_args(**overrides):
-    defaults = {
-        "steps": 10,
-        "loss_start": 1.5,
-        "loss_min": 0.1,
-        "acc_start": 0.5,
-        "oscillation": 0.05,
-        "step_delay": 0,
-        "log_every": 2,
-        "log_style": "trainer",
-        "scenario": "normal",
-        "chaos_level": 1,
-        "seed": 42,
-        "save_every": 0,
-        "save_delay": 0,
-        "project_name": "project-name",
-        "run_name": "run-name",
-        "speed_jitter": 0.22,
-        "rainbow": False,
-    }
-    defaults.update(overrides)
-    return argparse.Namespace(**defaults)
+ROOT = Path(__file__).resolve().parent.parent
 
 
-class ValidationTests(unittest.TestCase):
-    def test_valid_args_pass(self):
-        slack_main.validate_args(make_args())
+class SpecTests(unittest.TestCase):
+    def test_builtin_preset_resolves(self):
+        args = slack_main.parse_args(["run", "llama-70b-pretrain", "--step-delay", "0"])
+        spec = slack_main.resolve_run_spec(args)
+        self.assertEqual(spec.name, "llama-70b-pretrain")
+        self.assertEqual(spec.step_delay, 0)
 
-    def test_invalid_scenario_fails(self):
-        with self.assertRaisesRegex(ValueError, "--scenario"):
-            slack_main.validate_args(make_args(scenario="coffee-break"))
+    def test_unknown_preset_fails_clearly(self):
+        args = slack_main.parse_args(["run", "missing-preset"])
+        with self.assertRaisesRegex(ValueError, "unknown preset"):
+            slack_main.resolve_run_spec(args)
 
-    def test_invalid_chaos_level_fails(self):
-        with self.assertRaisesRegex(ValueError, "--chaos-level"):
-            slack_main.validate_args(make_args(chaos_level=7))
+    def test_yaml_config_loads_with_defaults(self):
+        spec = slack_main.load_run_spec(str(ROOT / "tests" / "fixtures" / "sample_run.yaml"))
+        self.assertEqual(spec.name, "fixture-run")
+        self.assertEqual(spec.log_style, "trainer")
+        self.assertEqual(spec.steps, 8)
+        self.assertEqual(spec.save_every, 0)
+        self.assertEqual(len(spec.stages), 3)
+
+    def test_invalid_stage_range_fails(self):
+        spec = slack_main.RunSpec(
+            name="bad",
+            description="bad",
+            stages=(slack_main.StageSpec("train", 0.6, 0.4),),
+        )
+        with self.assertRaisesRegex(ValueError, "start_pct"):
+            slack_main.validate_run_spec(spec)
 
 
 class FormattingTests(unittest.TestCase):
@@ -96,46 +95,66 @@ class EventTests(unittest.TestCase):
         self.assertIsNone(event)
 
 
+class CinematicRunTests(unittest.TestCase):
+    def test_summary_contains_core_counts(self):
+        spec = slack_main.RunSpec(
+            name="unit-run",
+            description="unit",
+            steps=6,
+            step_delay=0,
+            save_every=0,
+            log_every=2,
+            stages=slack_main.default_stages("finetune", 0),
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False, width=120)
+        summary = slack_main.run_cinematic(spec, console)
+        text = output.getvalue()
+        self.assertEqual(summary.steps, 6)
+        self.assertIsNotNone(summary.final_metrics)
+        self.assertIn("summary: unit-run", text)
+        self.assertIn("final loss", text)
+
+    def test_presets_output_contains_professional_and_parody(self):
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False, width=120)
+        slack_main.list_presets(console)
+        text = output.getvalue()
+        self.assertIn("llama-70b-pretrain", text)
+        self.assertIn("boss-is-watching", text)
+
+
 class CliSmokeTests(unittest.TestCase):
     def run_cli(self, *args):
         command = [sys.executable, "-m", "simulate_train.main", *args]
         return subprocess.run(command, text=True, capture_output=True, check=True)
 
-    def test_basic_cli_smoke(self):
-        result = self.run_cli("--steps", "3", "--step-delay", "0", "--save-every", "0", "--log-every", "1")
-        self.assertIn("'loss'", result.stdout)
+    def test_presets_cli_smoke(self):
+        result = self.run_cli("presets")
+        self.assertIn("llama-70b-pretrain", result.stdout)
+        self.assertIn("boss-is-watching", result.stdout)
 
-    def test_llm_pretrain_chaos_smoke(self):
+    def test_builtin_run_cli_smoke(self):
+        result = self.run_cli("run", "boss-is-watching", "--step-delay", "0", "--steps", "5", "--save-every", "0")
+        self.assertIn("slackDL run: boss-is-watching", result.stdout)
+        self.assertIn("summary: boss-is-watching", result.stdout)
+
+    def test_config_run_cli_smoke(self):
         result = self.run_cli(
-            "--steps",
-            "3",
-            "--scenario",
-            "llm-pretrain",
-            "--chaos-level",
-            "2",
-            "--seed",
-            "42",
+            "run",
+            "--config",
+            str(ROOT / "tests" / "fixtures" / "sample_run.yaml"),
             "--step-delay",
             "0",
-            "--save-every",
-            "0",
         )
-        self.assertRegex(result.stdout, "WARNING|ERROR|INFO")
+        self.assertIn("slackDL run: fixture-run", result.stdout)
+        self.assertIn("summary: fixture-run", result.stdout)
 
-    def test_diffusion_style_smoke(self):
-        result = self.run_cli(
-            "--steps",
-            "3",
-            "--log-style",
-            "stable-diffusion",
-            "--scenario",
-            "diffusion",
-            "--step-delay",
-            "0",
-            "--save-every",
-            "0",
-        )
-        self.assertIn("step_loss", result.stdout)
+    def test_legacy_flags_print_migration_hint(self):
+        command = [sys.executable, "-m", "simulate_train.main", "--steps", "3"]
+        result = subprocess.run(command, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("changed its CLI", result.stdout)
 
 
 if __name__ == "__main__":

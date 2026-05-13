@@ -1,0 +1,30 @@
+name: fixture-run
+description: Tiny custom run used by the test suite.
+log_style: trainer
+seed: 99
+steps: 8
+step_delay: 0
+log_every: 2
+save_every: 0
+project_name: fixture
+run_name: yaml-script
+stages:
+  - name: bootstrap
+    start_pct: 0.0
+    end_pct: 0.25
+    scenario: normal
+    chaos_level: 0
+  - name: train
+    start_pct: 0.25
+    end_pct: 0.75
+    scenario: finetune
+    chaos_level: 1
+    events:
+      - level: INFO
+        message: "fixture scripted event reached"
+        at_pct: 0.5
+  - name: summary
+    start_pct: 0.75
+    end_pct: 1.0
+    scenario: finetune
+    chaos_level: 0
