@@ -6,6 +6,10 @@
 
 > 可信 AI 训练日志生成器：给演示、教学、测试和认真摸鱼一个完整终端现场。
 
+## Demo 展示
+
+![TrainFake demo](assets/demo.gif)
+
 `TrainFake` 是一个 preset-first 的终端 AI 训练运行模拟器。它不会真正训练模型，但会像一场真实深度学习任务一样，在终端里经历环境扫描、warmup、主训练循环、事故窗口、恢复、eval、checkpoint 和 summary。
 
 它适合演示、日志解析测试、教学、截图、发布宣传，也适合在需要让终端看起来非常认真时，给屏幕一点可信的训练现场感。CLI 命令是 `trainfake`。

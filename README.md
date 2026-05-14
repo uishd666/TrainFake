@@ -6,6 +6,10 @@
 
 > Cinematic AI training logs for demos, tests, teaching, and suspiciously serious terminals.
 
+## Demo
+
+![TrainFake demo](assets/demo.gif)
+
 `TrainFake` is a preset-first terminal simulator for believable AI training runs. It does not train a real model, but it stages a complete deep learning session with environment scans, warmup, the main loop, incident windows, recovery logs, eval-flavored metrics, checkpoints, and a final summary table.
 
 It is built for demos, log parser tests, teaching, screenshots, launch posts, and any moment when a terminal needs to look convincingly busy without touching a GPU. The CLI command is `trainfake`.
