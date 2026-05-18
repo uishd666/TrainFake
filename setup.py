@@ -14,6 +14,7 @@ setup(
     install_requires=[
         "PyYAML>=6.0.0",
         "rich>=13.7.0",
+        "textual>=0.63.3,<1.0",
     ],
     entry_points={
         "console_scripts": [

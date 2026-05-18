@@ -56,6 +56,12 @@ trainfake run llama-70b-pretrain
 trainfake run boss-is-watching --step-delay 0
 ```
 
+启动左右分屏 TUI，左侧实时日志、右侧指标曲线：
+
+```bash
+trainfake tui boss-is-watching
+```
+
 使用 YAML 剧本：
 
 ```bash
@@ -85,9 +91,13 @@ trainfake run --config tests/fixtures/sample_run.yaml
 trainfake presets
 trainfake run <preset>
 trainfake run --config path/to/run.yaml
+trainfake tui <preset>
+trainfake tui --config path/to/run.yaml
 ```
 
-`run` 支持少量覆盖参数：
+`run` 会输出传统流式日志；`tui` 会打开交互式分屏终端界面。两者使用同一套模拟引擎。
+
+`run` 和 `tui` 支持少量覆盖参数：
 
 | 参数 | 说明 |
 | --- | --- |
@@ -99,6 +109,25 @@ trainfake run --config path/to/run.yaml
 | `--rainbow` | 为日志字段启用 ANSI 彩色输出。 |
 
 旧版顶层参数如 `--scenario`、`--log-style`、`--steps` 不再是主入口。直接使用旧参数时，CLI 会给出迁移提示，推荐改用 `trainfake run <preset>` 或 `trainfake run --config ...`。
+
+## TUI 模式
+
+Textual 驱动的 TUI 使用与 `run` 相同的训练模拟逻辑，但会渲染成一个终端仪表盘：
+
+- 左侧：实时日志流、阶段切换、事故事件和 checkpoint 消息。
+- 右侧：运行状态、进度、事故计数、checkpoint 路径和 ASCII 指标曲线。
+- 默认曲线：`loss`、`val_loss`、`grad_norm`、`learning_rate`、`gpu_memory_gb`、`samples_per_second`。
+- 根据场景自动追加特色指标，例如 `reward_accuracy`、`faithfulness`、`contrastive_loss`、`node_pressure`。
+
+快捷键：
+
+| 按键 | 动作 |
+| --- | --- |
+| `q` | 退出。 |
+| `p` | 暂停或继续模拟。 |
+| `l` | 聚焦日志面板。 |
+| `m` | 聚焦指标面板。 |
+| `1`-`6` | 高亮一个主要指标曲线。 |
 
 ## YAML 剧本
 

@@ -81,6 +81,20 @@ class RunSummary:
     elapsed_seconds: float = 0.0
 
 
+@dataclass(frozen=True)
+class RunFrame:
+    step: int
+    stage: StageSpec
+    metrics: Optional["TrainingMetrics"]
+    summary_state: RunSummary
+    stage_started: bool = False
+    log_line: Optional[str] = None
+    events: tuple[str, ...] = ()
+    checkpoint_path: Optional[str] = None
+    delay_seconds: float = 0.0
+    final: bool = False
+
+
 def incident(level: str, message: str, at_pct: float) -> IncidentSpec:
     return IncidentSpec(level=level, message=message, at_pct=at_pct)
 
@@ -350,16 +364,24 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     presets_parser.set_defaults(command="presets")
 
     run_parser = subparsers.add_parser("run", help="Run a built-in preset or a YAML run script.")
-    run_parser.add_argument("preset", nargs="?", help="Built-in preset name.")
-    run_parser.add_argument("--config", help="Path to a YAML run script.")
-    run_parser.add_argument("--steps", type=int, help="Override total simulated steps.")
-    run_parser.add_argument("--step-delay", type=float, help="Override seconds to wait between samples.")
-    run_parser.add_argument("--seed", type=int, help="Override the run seed.")
-    run_parser.add_argument("--log-every", type=int, help="Override metric log cadence.")
-    run_parser.add_argument("--save-every", type=int, help="Override checkpoint cadence; use 0 to disable.")
-    run_parser.add_argument("--rainbow", action="store_true", help="Enable ANSI coloring inside log payloads.")
+    add_run_arguments(run_parser)
     run_parser.set_defaults(command="run")
+
+    tui_parser = subparsers.add_parser("tui", help="Run an interactive split-screen terminal UI.")
+    add_run_arguments(tui_parser)
+    tui_parser.set_defaults(command="tui")
     return parser.parse_args(argv)
+
+
+def add_run_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("preset", nargs="?", help="Built-in preset name.")
+    parser.add_argument("--config", help="Path to a YAML run script.")
+    parser.add_argument("--steps", type=int, help="Override total simulated steps.")
+    parser.add_argument("--step-delay", type=float, help="Override seconds to wait between samples.")
+    parser.add_argument("--seed", type=int, help="Override the run seed.")
+    parser.add_argument("--log-every", type=int, help="Override metric log cadence.")
+    parser.add_argument("--save-every", type=int, help="Override checkpoint cadence; use 0 to disable.")
+    parser.add_argument("--rainbow", action="store_true", help="Enable ANSI coloring inside log payloads.")
 
 
 def validate_args(args: argparse.Namespace) -> None:
@@ -1167,14 +1189,104 @@ def render_summary(console: Console, summary: RunSummary) -> None:
     console.print(table)
 
 
-def run_cinematic(spec: RunSpec, console: Optional[Console] = None, rainbow: bool = False) -> RunSummary:
+def snapshot_summary(summary: RunSummary) -> RunSummary:
+    return RunSummary(
+        spec_name=summary.spec_name,
+        steps=summary.steps,
+        final_metrics=summary.final_metrics,
+        best_checkpoint=summary.best_checkpoint,
+        incidents=summary.incidents,
+        recoveries=summary.recoveries,
+        elapsed_seconds=summary.elapsed_seconds,
+    )
+
+
+def iter_run_frames(spec: RunSpec, rainbow: bool = False, sleep: bool = True):
     validate_run_spec(spec)
-    console = console or Console()
     rng = random.Random(spec.seed)
     summary = RunSummary(spec_name=spec.name, steps=spec.steps)
     emitted_scripted_events: set[tuple[str, float, str]] = set()
     current_stage_name: Optional[str] = None
     start_time = time.monotonic()
+
+    for step in range(1, spec.steps + 1):
+        stage = stage_for_step(spec, step)
+        stage_started = stage.name != current_stage_name
+        if stage_started:
+            current_stage_name = stage.name
+            if stage.name == "recovery":
+                summary.recoveries += 1
+
+        metrics = simulated_metrics(
+            step=step,
+            steps=spec.steps,
+            loss_start=spec.loss_start,
+            loss_min=spec.loss_min,
+            acc_start=spec.acc_start,
+            oscillation=spec.oscillation,
+            scenario=stage.scenario,
+            rng=rng,
+        )
+        summary.final_metrics = metrics
+        delay_seconds = simulated_step_delay(step, spec.step_delay, spec.speed_jitter, rng)
+        if sleep:
+            time.sleep(delay_seconds)
+
+        log_line = None
+        if step == 1 or step % spec.log_every == 0 or step == spec.steps:
+            log_line = format_log(spec.log_style, step, spec.steps, metrics, rainbow, stage.scenario)
+
+        events = []
+        for event in stage.events:
+            key = (stage.name, event.at_pct, event.message)
+            step_progress = (step - 1) / max(1, spec.steps - 1)
+            if key not in emitted_scripted_events and step_progress >= event.at_pct:
+                emitted_scripted_events.add(key)
+                summary.incidents += 1
+                events.append(format_event(event.level, event.message, rainbow))
+
+        event = training_event(step, spec.steps, stage.scenario, stage.chaos_level, metrics, rng, rainbow)
+        if event:
+            summary.incidents += 1
+            events.append(event)
+
+        checkpoint = None
+        if spec.save_every and step % spec.save_every == 0:
+            if sleep:
+                time.sleep(spec.save_delay)
+            checkpoint = checkpoint_path(spec.project_name, spec.run_name, step)
+            summary.best_checkpoint = checkpoint
+            delay_seconds += spec.save_delay
+
+        summary.elapsed_seconds = time.monotonic() - start_time
+        yield RunFrame(
+            step=step,
+            stage=stage,
+            metrics=metrics,
+            summary_state=snapshot_summary(summary),
+            stage_started=stage_started,
+            log_line=log_line,
+            events=tuple(events),
+            checkpoint_path=checkpoint,
+            delay_seconds=delay_seconds,
+        )
+
+    if summary.best_checkpoint == "none" and spec.save_every:
+        summary.best_checkpoint = checkpoint_path(spec.project_name, spec.run_name, spec.steps)
+    summary.elapsed_seconds = time.monotonic() - start_time
+    yield RunFrame(
+        step=spec.steps,
+        stage=spec.stages[-1],
+        metrics=summary.final_metrics,
+        summary_state=snapshot_summary(summary),
+        final=True,
+    )
+
+
+def run_cinematic(spec: RunSpec, console: Optional[Console] = None, rainbow: bool = False) -> RunSummary:
+    validate_run_spec(spec)
+    console = console or Console()
+    summary = RunSummary(spec_name=spec.name, steps=spec.steps)
 
     console.rule(f"[bold cyan]TrainFake run: {spec.name}")
     console.print(f"[dim]{spec.description}[/dim]")
@@ -1191,54 +1303,21 @@ def run_cinematic(spec: RunSpec, console: Optional[Console] = None, rainbow: boo
     )
     with progress:
         task_id = progress.add_task("training", total=spec.steps)
-        for step in range(1, spec.steps + 1):
-            stage = stage_for_step(spec, step)
-            if stage.name != current_stage_name:
-                current_stage_name = stage.name
-                console.print(f"[bold blue]stage:{stage.name}[/bold blue] {stage_banner(stage)}")
-                if stage.name == "recovery":
-                    summary.recoveries += 1
-                progress.update(task_id, description=stage.name)
-
-            metrics = simulated_metrics(
-                step=step,
-                steps=spec.steps,
-                loss_start=spec.loss_start,
-                loss_min=spec.loss_min,
-                acc_start=spec.acc_start,
-                oscillation=spec.oscillation,
-                scenario=stage.scenario,
-                rng=rng,
-            )
-            summary.final_metrics = metrics
-            time.sleep(simulated_step_delay(step, spec.step_delay, spec.speed_jitter, rng))
-
-            if step == 1 or step % spec.log_every == 0 or step == spec.steps:
-                console.print(format_log(spec.log_style, step, spec.steps, metrics, rainbow, stage.scenario), markup=False)
-
-            for event in stage.events:
-                key = (stage.name, event.at_pct, event.message)
-                step_progress = (step - 1) / max(1, spec.steps - 1)
-                if key not in emitted_scripted_events and step_progress >= event.at_pct:
-                    emitted_scripted_events.add(key)
-                    summary.incidents += 1
-                    console.print(format_event(event.level, event.message, rainbow), markup=False)
-
-            event = training_event(step, spec.steps, stage.scenario, stage.chaos_level, metrics, rng, rainbow)
-            if event:
-                summary.incidents += 1
+        for frame in iter_run_frames(spec, rainbow):
+            summary = frame.summary_state
+            if frame.final:
+                continue
+            if frame.stage_started:
+                console.print(f"[bold blue]stage:{frame.stage.name}[/bold blue] {stage_banner(frame.stage)}")
+                progress.update(task_id, description=frame.stage.name)
+            if frame.log_line:
+                console.print(frame.log_line, markup=False)
+            for event in frame.events:
                 console.print(event, markup=False)
-
-            if spec.save_every and step % spec.save_every == 0:
-                time.sleep(spec.save_delay)
-                summary.best_checkpoint = checkpoint_path(spec.project_name, spec.run_name, step)
-                console.print(f"INFO checkpointing.py: saved model checkpoint to {summary.best_checkpoint}")
-
+            if frame.checkpoint_path:
+                console.print(f"INFO checkpointing.py: saved model checkpoint to {frame.checkpoint_path}")
             progress.advance(task_id)
 
-    if summary.best_checkpoint == "none" and spec.save_every:
-        summary.best_checkpoint = checkpoint_path(spec.project_name, spec.run_name, spec.steps)
-    summary.elapsed_seconds = time.monotonic() - start_time
     render_summary(console, summary)
     return summary
 
@@ -1268,6 +1347,13 @@ def main() -> None:
             list_presets(console)
         elif args.command == "run":
             run_cinematic(resolve_run_spec(args), console, args.rainbow)
+        elif args.command == "tui":
+            try:
+                from .tui import run_tui
+            except ImportError as exc:
+                raise SystemExit("error: trainfake tui requires Textual; install with `python3 -m pip install .`") from exc
+
+            run_tui(resolve_run_spec(args), args.rainbow)
         else:
             print_default_help(console)
     except ValueError as exc:

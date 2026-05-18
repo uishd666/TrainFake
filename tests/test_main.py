@@ -1,4 +1,5 @@
 import io
+import importlib.util
 import random
 import subprocess
 import sys
@@ -54,6 +55,14 @@ class SpecTests(unittest.TestCase):
                 spec = slack_main.resolve_run_spec(args)
                 slack_main.validate_run_spec(spec)
                 self.assertEqual(spec.name, preset)
+
+    def test_tui_command_resolves_like_run(self):
+        args = slack_main.parse_args(["tui", "boss-is-watching", "--step-delay", "0", "--steps", "5"])
+        spec = slack_main.resolve_run_spec(args)
+        self.assertEqual(args.command, "tui")
+        self.assertEqual(spec.name, "boss-is-watching")
+        self.assertEqual(spec.step_delay, 0)
+        self.assertEqual(spec.steps, 5)
 
 
 class FormattingTests(unittest.TestCase):
@@ -179,6 +188,81 @@ class CinematicRunTests(unittest.TestCase):
         self.assertIn("rag-eval-nightly", text)
         self.assertIn("multimodal-pretrain", text)
         self.assertIn("k8s-gpu-drill", text)
+
+
+class FrameStreamTests(unittest.TestCase):
+    def test_iter_run_frames_is_seed_reproducible(self):
+        spec = slack_main.RunSpec(
+            name="stream-run",
+            description="stream",
+            seed=123,
+            steps=6,
+            step_delay=0,
+            save_every=3,
+            log_every=2,
+            stages=slack_main.default_stages("llm-pretrain", 1),
+        )
+
+        def signature():
+            frames = list(slack_main.iter_run_frames(spec, sleep=False))
+            return [
+                (
+                    frame.step,
+                    frame.stage.name,
+                    frame.stage_started,
+                    frame.log_line,
+                    frame.events,
+                    frame.checkpoint_path,
+                    frame.summary_state.incidents,
+                    frame.summary_state.recoveries,
+                    frame.final,
+                )
+                for frame in frames
+            ]
+
+        self.assertEqual(signature(), signature())
+
+    def test_iter_run_frames_contains_summary_state(self):
+        spec = slack_main.RunSpec(
+            name="stream-run",
+            description="stream",
+            steps=4,
+            step_delay=0,
+            save_every=0,
+            log_every=2,
+            stages=slack_main.default_stages("finetune", 0),
+        )
+        frames = list(slack_main.iter_run_frames(spec, sleep=False))
+        self.assertEqual(len(frames), 5)
+        first = frames[0]
+        final = frames[-1]
+        self.assertEqual(first.step, 1)
+        self.assertIsNotNone(first.metrics)
+        self.assertTrue(first.stage_started)
+        self.assertIsNotNone(first.log_line)
+        self.assertTrue(final.final)
+        self.assertIsNotNone(final.summary_state.final_metrics)
+
+
+@unittest.skipUnless(importlib.util.find_spec("textual"), "Textual is not installed")
+class TuiAppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tui_app_mounts_core_widgets(self):
+        from simulate_train.tui import TrainFakeTui
+
+        spec = slack_main.RunSpec(
+            name="tui-run",
+            description="tui",
+            steps=1,
+            step_delay=0,
+            save_every=0,
+            stages=slack_main.default_stages("finetune", 0),
+        )
+        app = TrainFakeTui(spec)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause(0.02)
+            self.assertEqual(app.query_one("#logs").id, "logs")
+            self.assertEqual(app.query_one("#status").id, "status")
+            self.assertEqual(app.query_one("#metrics").id, "metrics")
 
 
 class CliSmokeTests(unittest.TestCase):

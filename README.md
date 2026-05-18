@@ -56,6 +56,12 @@ Run a fast demo with no real delay:
 trainfake run boss-is-watching --step-delay 0
 ```
 
+Run the split-screen TUI with live logs and metric curves:
+
+```bash
+trainfake tui boss-is-watching
+```
+
 Run from a YAML script:
 
 ```bash
@@ -85,9 +91,13 @@ Running `trainfake` with no subcommand prints recommended commands instead of st
 trainfake presets
 trainfake run <preset>
 trainfake run --config path/to/run.yaml
+trainfake tui <preset>
+trainfake tui --config path/to/run.yaml
 ```
 
-`run` supports a small set of overrides:
+`run` prints a classic streaming log. `tui` opens an interactive split-screen terminal view with live logs on the left and metric curves on the right.
+
+`run` and `tui` support a small set of overrides:
 
 | Flag | Description |
 | --- | --- |
@@ -99,6 +109,25 @@ trainfake run --config path/to/run.yaml
 | `--rainbow` | Enable ANSI colors inside log fields. |
 
 Legacy top-level flags such as `--scenario`, `--log-style`, and `--steps` are no longer the primary interface. Use `trainfake run <preset>` or `trainfake run --config ...` instead.
+
+## TUI Mode
+
+The Textual-powered TUI keeps the same simulated training engine as `run`, but renders it as a terminal dashboard:
+
+- Left pane: live log stream, stage changes, incidents, and checkpoint messages.
+- Right pane: run status, progress, incident counts, checkpoint path, and ASCII metric curves.
+- Default curves: `loss`, `val_loss`, `grad_norm`, `learning_rate`, `gpu_memory_gb`, and `samples_per_second`.
+- Scenario-specific curves are added automatically, such as `reward_accuracy`, `faithfulness`, `contrastive_loss`, or `node_pressure`.
+
+Keyboard shortcuts:
+
+| Key | Action |
+| --- | --- |
+| `q` | Quit. |
+| `p` | Pause or resume the simulation. |
+| `l` | Focus the log pane. |
+| `m` | Focus the metric pane. |
+| `1`-`6` | Highlight a primary metric curve. |
 
 ## YAML Runs
 
