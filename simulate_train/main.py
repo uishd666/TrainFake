@@ -26,7 +26,7 @@ RAINBOW_COLORS = (
 )
 RESET_COLOR = "\033[0m"
 LOG_STYLES = ("trainer", "deepspeed", "vllm", "stable-diffusion")
-SCENARIOS = ("normal", "llm-pretrain", "finetune", "diffusion")
+SCENARIOS = ("normal", "llm-pretrain", "finetune", "diffusion", "rlhf", "rag-eval", "multimodal", "k8s-gpu")
 CHAOS_LEVELS = (0, 1, 2)
 STAGE_NAMES = ("bootstrap", "warmup", "train", "incident", "recovery", "eval", "checkpoint", "summary")
 
@@ -218,6 +218,74 @@ PRESETS: dict[str, RunSpec] = {
         acc_start=0.54,
         stages=default_stages("finetune", 2),
     ),
+    "rlhf-reward-model": RunSpec(
+        name="rlhf-reward-model",
+        description="Reward model training with pairwise loss, chosen/rejected accuracy, and labeler queue pressure.",
+        kind="professional",
+        log_style="trainer",
+        seed=3407,
+        steps=190,
+        step_delay=0.022,
+        log_every=10,
+        save_every=38,
+        project_name="alignment-lab",
+        run_name="reward-model-pairwise-v3",
+        loss_start=1.65,
+        loss_min=0.09,
+        acc_start=0.56,
+        stages=default_stages("rlhf", 1),
+    ),
+    "rag-eval-nightly": RunSpec(
+        name="rag-eval-nightly",
+        description="RAG evaluation pipeline with retrieval quality, faithfulness scoring, and latency drift.",
+        kind="professional",
+        log_style="vllm",
+        seed=2025,
+        steps=150,
+        step_delay=0.018,
+        log_every=6,
+        save_every=0,
+        project_name="search-quality",
+        run_name="rag-eval-nightly",
+        loss_start=1.0,
+        loss_min=0.05,
+        acc_start=0.61,
+        stages=default_stages("rag-eval", 1),
+    ),
+    "multimodal-pretrain": RunSpec(
+        name="multimodal-pretrain",
+        description="Vision-language pretraining with contrastive loss, mixed batches, and vision encoder cache churn.",
+        kind="professional",
+        log_style="deepspeed",
+        seed=777,
+        steps=240,
+        step_delay=0.024,
+        log_every=12,
+        save_every=60,
+        project_name="vl-foundation",
+        run_name="multimodal-pretrain-a100",
+        loss_start=2.1,
+        loss_min=0.12,
+        acc_start=0.42,
+        stages=default_stages("multimodal", 1),
+    ),
+    "k8s-gpu-drill": RunSpec(
+        name="k8s-gpu-drill",
+        description="Kubernetes GPU cluster rehearsal with pod scheduling, node pressure, NCCL checks, and checkpoint resume.",
+        kind="professional",
+        log_style="deepspeed",
+        seed=909,
+        steps=170,
+        step_delay=0.02,
+        log_every=8,
+        save_every=34,
+        project_name="cluster-drills",
+        run_name="k8s-gpu-failover-rank0",
+        loss_start=1.9,
+        loss_min=0.1,
+        acc_start=0.5,
+        stages=default_stages("k8s-gpu", 2),
+    ),
 }
 
 
@@ -254,6 +322,21 @@ class TrainingMetrics:
     diffusion_timestep: int
     noise_offset: float
     snr_gamma: float
+    pairwise_loss: float
+    reward_accuracy: float
+    chosen_margin: float
+    labeler_queue: int
+    retrieval_hit_rate: float
+    context_precision: float
+    faithfulness: float
+    p95_latency_ms: float
+    contrastive_loss: float
+    image_batch: int
+    text_batch: int
+    vision_cache_hit_rate: float
+    pods_running: int
+    node_pressure: float
+    checkpoint_resume_count: int
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -371,6 +454,21 @@ def simulated_metrics(
     diffusion_timestep = int(999 * (0.5 + 0.5 * math.sin(step * 0.041)))
     noise_offset = max(0.0, 0.08 + 0.02 * math.sin(step * 0.012))
     snr_gamma = 5.0
+    pairwise_loss = max(0.02, loss * 0.72 + 0.04 * math.sin(step * 0.018))
+    reward_accuracy = min(0.995, max(0.45, accuracy + 0.02 * math.sin(step * 0.012)))
+    chosen_margin = max(0.01, 0.18 + 0.62 * progress + 0.04 * math.cos(step * 0.015))
+    labeler_queue = max(0, int(22 - 14 * progress + 4 * math.sin(step * 0.017)))
+    retrieval_hit_rate = min(0.995, max(0.35, 0.58 + 0.32 * progress + 0.04 * math.sin(step * 0.019)))
+    context_precision = min(0.995, max(0.3, 0.54 + 0.34 * progress + 0.03 * math.cos(step * 0.021)))
+    faithfulness = min(0.995, max(0.25, 0.5 + 0.38 * progress + 0.035 * math.sin(step * 0.016)))
+    p95_latency_ms = max(80.0, 360.0 - 120.0 * progress + 24.0 * math.sin(step * 0.02))
+    contrastive_loss = max(0.02, loss * 0.82 + 0.05 * math.sin(step * 0.017))
+    image_batch = max(8, int(48 + 8 * math.sin(step * 0.013)))
+    text_batch = max(8, int(96 + 12 * math.cos(step * 0.011)))
+    vision_cache_hit_rate = min(0.99, max(0.28, 0.42 + 0.44 * progress + 0.05 * math.sin(step * 0.014)))
+    pods_running = max(1, int(8 + 2 * math.sin(step * 0.01)))
+    node_pressure = min(0.98, max(0.28, 0.46 + 0.34 * progress + 0.05 * math.sin(step * 0.018)))
+    checkpoint_resume_count = 1 if progress > 0.78 else 0
 
     metrics = TrainingMetrics(
         loss=loss,
@@ -404,6 +502,21 @@ def simulated_metrics(
         diffusion_timestep=diffusion_timestep,
         noise_offset=noise_offset,
         snr_gamma=snr_gamma,
+        pairwise_loss=pairwise_loss,
+        reward_accuracy=reward_accuracy,
+        chosen_margin=chosen_margin,
+        labeler_queue=labeler_queue,
+        retrieval_hit_rate=retrieval_hit_rate,
+        context_precision=context_precision,
+        faithfulness=faithfulness,
+        p95_latency_ms=p95_latency_ms,
+        contrastive_loss=contrastive_loss,
+        image_batch=image_batch,
+        text_batch=text_batch,
+        vision_cache_hit_rate=vision_cache_hit_rate,
+        pods_running=pods_running,
+        node_pressure=node_pressure,
+        checkpoint_resume_count=checkpoint_resume_count,
     )
     return apply_scenario(metrics, scenario, progress, step)
 
@@ -452,6 +565,58 @@ def apply_scenario(metrics: TrainingMetrics, scenario: str, progress: float, ste
             gpu_memory_gb=min(79.0, 27.0 + 22.0 * progress + 1.9 * math.sin(step * 0.018)),
             ema_decay=min(0.99995, 0.996 + 0.0038 * progress),
             noise_offset=max(0.0, metrics.noise_offset + 0.015 * math.sin(step * 0.029)),
+        )
+    if scenario == "rlhf":
+        reward_accuracy = min(0.997, metrics.reward_accuracy + 0.025 * (1 - math.exp(-4 * progress)))
+        return replace(
+            metrics,
+            loss=max(0.02, metrics.loss * 0.9),
+            val_loss=max(0.02, metrics.val_loss * 0.94),
+            pairwise_loss=max(0.015, metrics.pairwise_loss * 0.78),
+            reward_accuracy=reward_accuracy,
+            chosen_margin=max(0.02, metrics.chosen_margin + 0.1 * progress),
+            labeler_queue=max(0, metrics.labeler_queue + int(3 * math.sin(step * 0.023))),
+            samples_per_second=max(0.35, metrics.samples_per_second * 0.62),
+            tokens_per_second=max(300.0, metrics.tokens_per_second * 0.82),
+            gpu_memory_gb=min(79.0, metrics.gpu_memory_gb + 8.0),
+        )
+    if scenario == "rag-eval":
+        return replace(
+            metrics,
+            loss=max(0.01, metrics.loss * 0.68),
+            val_loss=max(0.01, metrics.val_loss * 0.72),
+            retrieval_hit_rate=min(0.998, metrics.retrieval_hit_rate + 0.04),
+            context_precision=min(0.998, metrics.context_precision + 0.035),
+            faithfulness=min(0.997, metrics.faithfulness + 0.03),
+            p95_latency_ms=max(65.0, metrics.p95_latency_ms + 18.0 * math.sin(step * 0.027)),
+            samples_per_second=max(0.5, metrics.samples_per_second * 0.5),
+            tokens_per_second=max(450.0, metrics.tokens_per_second * 1.8),
+            requests_waiting=max(0, metrics.requests_waiting + int(2 * math.sin(step * 0.03))),
+        )
+    if scenario == "multimodal":
+        return replace(
+            metrics,
+            loss=max(0.02, metrics.loss * 1.03),
+            val_loss=max(0.02, metrics.val_loss * 1.05),
+            contrastive_loss=max(0.02, metrics.contrastive_loss * 0.9),
+            image_batch=max(8, metrics.image_batch - 8),
+            text_batch=max(16, metrics.text_batch - 12),
+            vision_cache_hit_rate=min(0.995, metrics.vision_cache_hit_rate + 0.06),
+            samples_per_second=max(0.2, metrics.samples_per_second * 0.38),
+            tokens_per_second=max(500.0, metrics.tokens_per_second * 4.2),
+            gpu_memory_gb=min(79.0, 38.0 + 25.0 * progress + 2.2 * math.sin(step * 0.017)),
+            allreduce_latency_ms=metrics.allreduce_latency_ms * 1.2,
+        )
+    if scenario == "k8s-gpu":
+        return replace(
+            metrics,
+            pods_running=max(1, metrics.pods_running + int(2 * math.sin(step * 0.031))),
+            node_pressure=min(0.99, metrics.node_pressure + 0.08),
+            checkpoint_resume_count=1 if progress > 0.66 else 0,
+            samples_per_second=max(0.2, metrics.samples_per_second * (0.72 + 0.08 * math.sin(step * 0.02))),
+            tokens_per_second=max(450.0, metrics.tokens_per_second * 5.8),
+            gpu_memory_gb=min(79.0, 36.0 + 28.0 * progress + 2.0 * math.sin(step * 0.02)),
+            allreduce_latency_ms=metrics.allreduce_latency_ms * 1.35,
         )
     return metrics
 
@@ -528,7 +693,57 @@ def format_stable_diffusion_log(step: int, steps: int, metrics: TrainingMetrics,
     return f"Steps {step}/{steps} | {' | '.join(segments)}"
 
 
-def format_log(style: str, step: int, steps: int, metrics: TrainingMetrics, rainbow: bool) -> str:
+def format_scenario_log(scenario: str, step: int, steps: int, metrics: TrainingMetrics, rainbow: bool) -> Optional[str]:
+    if scenario == "rlhf":
+        segments = [
+            metric_segment("pairwise_loss", f"{metrics.pairwise_loss:.4f}", 0, rainbow),
+            metric_segment("reward_accuracy", f"{metrics.reward_accuracy:.4f}", 1, rainbow),
+            metric_segment("chosen_margin", f"{metrics.chosen_margin:.3f}", 2, rainbow),
+            metric_segment("labeler_queue", str(metrics.labeler_queue), 3, rainbow),
+            metric_segment("grad_norm", f"{metrics.grad_norm:.4f}", 4, rainbow),
+        ]
+        return f"{{'step': {step}, " + ", ".join(segments) + "}"
+    if scenario == "rag-eval":
+        segments = [
+            metric_segment("retrieval_hit_rate", f"{metrics.retrieval_hit_rate:.4f}", 0, rainbow),
+            metric_segment("context_precision", f"{metrics.context_precision:.4f}", 1, rainbow),
+            metric_segment("faithfulness", f"{metrics.faithfulness:.4f}", 2, rainbow),
+            metric_segment("p95_latency_ms", f"{metrics.p95_latency_ms:.1f}", 3, rainbow),
+            metric_segment("waiting", str(metrics.requests_waiting), 4, rainbow),
+        ]
+        return f"INFO {step:>7} rag_eval.py: nightly eval metrics: {'; '.join(segments)}"
+    if scenario == "multimodal":
+        segments = [
+            metric_segment("contrastive_loss", f"{metrics.contrastive_loss:.4f}", 0, rainbow),
+            metric_segment("image_batch", str(metrics.image_batch), 1, rainbow),
+            metric_segment("text_batch", str(metrics.text_batch), 2, rainbow),
+            metric_segment("vision_cache_hit_rate", f"{metrics.vision_cache_hit_rate * 100:.1f}%", 3, rainbow),
+            metric_segment("gpu_mem", f"{metrics.gpu_memory_gb:.1f}GB", 4, rainbow),
+        ]
+        return f"[rank0] multimodal pretrain | step: {step}/{steps} | {' | '.join(segments)}"
+    if scenario == "k8s-gpu":
+        segments = [
+            metric_segment("pod", f"trainer-rank0/{metrics.pods_running} running", 0, rainbow),
+            metric_segment("node_pressure", f"{metrics.node_pressure * 100:.1f}%", 1, rainbow),
+            metric_segment("checkpoint_resume", str(metrics.checkpoint_resume_count), 2, rainbow),
+            metric_segment("nccl_allreduce", f"{metrics.allreduce_latency_ms:.2f} ms", 3, rainbow),
+            metric_segment("tokens/sec", f"{metrics.tokens_per_second:.1f}", 4, rainbow),
+        ]
+        return f"INFO k8s-gpu-drill step={step}: {' | '.join(segments)}"
+    return None
+
+
+def format_log(
+    style: str,
+    step: int,
+    steps: int,
+    metrics: TrainingMetrics,
+    rainbow: bool,
+    scenario: str = "normal",
+) -> str:
+    scenario_log = format_scenario_log(scenario, step, steps, metrics, rainbow)
+    if scenario_log:
+        return scenario_log
     if style == "deepspeed":
         return format_deepspeed_log(step, metrics, rainbow)
     if style == "vllm":
@@ -617,6 +832,94 @@ def training_event(
             (
                 "WARNING",
                 f"latent cache miss burst; gpu_mem={metrics.gpu_memory_gb:.1f}GB, retrying dataloader prefetch",
+            ),
+        ],
+        "rlhf": [
+            (
+                "INFO",
+                f"reward_accuracy={metrics.reward_accuracy:.4f}; chosen_margin={metrics.chosen_margin:.3f} looks stable",
+            ),
+            (
+                "WARNING",
+                f"labeler_queue backed up to {metrics.labeler_queue}; pairwise batches stay cached",
+            ),
+            (
+                "INFO",
+                f"pairwise_loss={metrics.pairwise_loss:.4f}; rejected samples remain below chosen logits",
+            ),
+            (
+                "WARNING",
+                f"preference shard skew detected near step {step}; resampling hard negatives",
+            ),
+            (
+                "INFO",
+                f"calibration sweep accepted reward head; reward_accuracy={metrics.reward_accuracy:.4f}",
+            ),
+        ],
+        "rag-eval": [
+            (
+                "INFO",
+                f"retrieval_hit_rate={metrics.retrieval_hit_rate:.4f}; context_precision={metrics.context_precision:.4f}",
+            ),
+            (
+                "INFO",
+                f"faithfulness={metrics.faithfulness:.4f}; judge cache reused grounded answers",
+            ),
+            (
+                "WARNING",
+                f"p95_latency_ms={metrics.p95_latency_ms:.1f}; reranker queue warming during nightly eval",
+            ),
+            (
+                "WARNING",
+                f"document chunk drift detected; retrieval_hit_rate={metrics.retrieval_hit_rate:.4f} still above gate",
+            ),
+            (
+                "INFO",
+                f"citation verifier passed batch {step}; faithfulness trend remains positive",
+            ),
+        ],
+        "multimodal": [
+            (
+                "INFO",
+                f"contrastive_loss={metrics.contrastive_loss:.4f}; image_batch={metrics.image_batch} text_batch={metrics.text_batch}",
+            ),
+            (
+                "WARNING",
+                f"vision encoder cache miss burst; vision_cache_hit_rate={metrics.vision_cache_hit_rate:.4f}",
+            ),
+            (
+                "INFO",
+                f"caption pairs synchronized; contrastive_loss={metrics.contrastive_loss:.4f}",
+            ),
+            (
+                "WARNING",
+                f"mixed resolution bucket overflow; image_batch reduced to {metrics.image_batch}",
+            ),
+            (
+                "INFO",
+                f"projector warm path active; vision_cache_hit_rate={metrics.vision_cache_hit_rate:.4f}",
+            ),
+        ],
+        "k8s-gpu": [
+            (
+                "INFO",
+                f"pod trainer-rank0 scheduled; {metrics.pods_running} gpu pods running across the pool",
+            ),
+            (
+                "WARNING",
+                f"node pressure at {metrics.node_pressure * 100:.1f}%; kubelet keeps eviction threshold clear",
+            ),
+            (
+                "WARNING",
+                f"NCCL health probe slowed allreduce to {metrics.allreduce_latency_ms:.2f} ms; pod remains ready",
+            ),
+            (
+                "INFO",
+                f"checkpoint resume count={metrics.checkpoint_resume_count}; rank0 state restored from object store",
+            ),
+            (
+                "WARNING",
+                f"pod preemption notice received for warm standby; checkpoint resume path verified",
             ),
         ],
     }
@@ -911,7 +1214,7 @@ def run_cinematic(spec: RunSpec, console: Optional[Console] = None, rainbow: boo
             time.sleep(simulated_step_delay(step, spec.step_delay, spec.speed_jitter, rng))
 
             if step == 1 or step % spec.log_every == 0 or step == spec.steps:
-                console.print(format_log(spec.log_style, step, spec.steps, metrics, rainbow), markup=False)
+                console.print(format_log(spec.log_style, step, spec.steps, metrics, rainbow, stage.scenario), markup=False)
 
             for event in stage.events:
                 key = (stage.name, event.at_pct, event.message)

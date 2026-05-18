@@ -16,7 +16,7 @@ It is built for demos, log parser tests, teaching, screenshots, launch posts, an
 
 ## Features
 
-- Built-in scenarios for LLM pretraining, Diffusers LoRA training, vLLM launch rehearsals, BERT fine-tuning, and compact demo runs.
+- Built-in scenarios for LLM pretraining, Diffusers LoRA training, vLLM launch rehearsals, BERT fine-tuning, RLHF reward models, RAG evals, multimodal pretraining, and GPU cluster drills.
 - YAML run scripts for custom stages, log styles, scripted events, checkpoint cadence, and reproducible seeds.
 - Hugging Face `Trainer`, DeepSpeed, vLLM, and Stable Diffusion/Diffusers-style log output.
 - Reproducible metrics, optional colored log fields, zero-delay demos, and a final summary table.
@@ -74,6 +74,10 @@ Running `trainfake` with no subcommand prints recommended commands instead of st
 | `bert-finetune` | Classic supervised fine-tuning with eval metrics, accuracy/F1 movement, and mild overfit warnings. |
 | `boss-is-watching` | A short but believable serious-terminal run. |
 | `deadline-finetune` | A compact adapter fine-tune with deadline energy while keeping the logs realistic. |
+| `rlhf-reward-model` | Reward model training with pairwise loss, chosen/rejected accuracy, and labeler queue pressure. |
+| `rag-eval-nightly` | RAG evaluation with retrieval hit rate, context precision, faithfulness, and latency drift. |
+| `multimodal-pretrain` | Vision-language pretraining with contrastive loss, image/text batches, and vision encoder cache churn. |
+| `k8s-gpu-drill` | Kubernetes GPU rehearsal with pod scheduling, node pressure, NCCL probes, and checkpoint resume. |
 
 ## Commands
 
@@ -142,12 +146,50 @@ Supported top-level fields include `name`, `description`, `log_style`, `seed`, `
 
 Each stage supports `name`, `start_pct`, `end_pct`, `scenario`, `chaos_level`, and `events`. Events support `level`, `message`, and `at_pct`.
 
+You can mix the newer scenario types in YAML without changing the schema:
+
+```yaml
+name: rag-alignment-demo
+description: RAG eval rolls into a compact reward-model pass.
+log_style: trainer
+steps: 80
+step_delay: 0
+save_every: 0
+stages:
+  - name: bootstrap
+    start_pct: 0.0
+    end_pct: 0.1
+    scenario: rag-eval
+    chaos_level: 0
+  - name: eval
+    start_pct: 0.1
+    end_pct: 0.55
+    scenario: rag-eval
+    chaos_level: 1
+    events:
+      - level: INFO
+        message: "faithfulness gate passed while retrieval_hit_rate stayed above target"
+        at_pct: 0.4
+  - name: train
+    start_pct: 0.55
+    end_pct: 0.95
+    scenario: rlhf
+    chaos_level: 1
+  - name: summary
+    start_pct: 0.95
+    end_pct: 1.0
+    scenario: rlhf
+    chaos_level: 0
+```
+
 ## Log Styles
 
 - `trainer`: Hugging Face `Trainer`-style metric dictionaries.
 - `deepspeed`: DeepSpeed wall-clock/profiler-style logs.
 - `vllm`: vLLM serving metrics-style logs.
 - `stable-diffusion`: Diffusers/Accelerate-style step logs.
+
+Scenario-specific runs may add fields such as `reward_accuracy`, `faithfulness`, `contrastive_loss`, and `pod` status while keeping the same CLI and YAML shape.
 
 ## Stages
 
@@ -175,6 +217,7 @@ Run CLI smoke checks:
 ```bash
 trainfake presets
 trainfake run boss-is-watching --step-delay 0 --steps 5 --save-every 0
+trainfake run rag-eval-nightly --step-delay 0 --steps 5 --save-every 0
 ```
 
 ## License

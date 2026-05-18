@@ -16,7 +16,7 @@
 
 ## 特性
 
-- 内置多种可信训练/服务场景：LLM 预训练、Diffusers LoRA、vLLM 上线彩排、BERT 微调和短平快演示。
+- 内置多种可信训练/服务场景：LLM 预训练、Diffusers LoRA、vLLM 上线彩排、BERT 微调、RLHF 奖励模型、RAG 评测、多模态预训练和 GPU 集群演练。
 - 支持 YAML 剧本，自定义阶段、日志风格、事件、checkpoint 频率和随机种子。
 - 输出 Hugging Face `Trainer`、DeepSpeed、vLLM、Stable Diffusion/Diffusers 风格日志。
 - 支持可复现 seed、彩色日志字段、快速零延迟演示和最终 summary 表格。
@@ -74,6 +74,10 @@ trainfake run --config tests/fixtures/sample_run.yaml
 | `bert-finetune` | 经典监督微调，突出 eval metrics、accuracy/F1 和轻微 overfit warning。 |
 | `boss-is-watching` | 短平快但足够可信的“终端正在认真训练”场景。 |
 | `deadline-finetune` | deadline 前的 adapter 微调现场，玩梗克制，日志仍保持真实感。 |
+| `rlhf-reward-model` | 奖励模型训练现场，包含 pairwise loss、chosen/rejected accuracy 和 labeler queue 压力。 |
+| `rag-eval-nightly` | RAG 评测流水线，包含 retrieval hit rate、context precision、faithfulness 和 latency drift。 |
+| `multimodal-pretrain` | 多模态预训练现场，包含 contrastive loss、image/text batch 和 vision encoder cache。 |
+| `k8s-gpu-drill` | Kubernetes GPU 演练，包含 pod 调度、node pressure、NCCL 探测和 checkpoint resume。 |
 
 ## 命令
 
@@ -142,12 +146,50 @@ stages:
 
 `stages` 支持 `name`、`start_pct`、`end_pct`、`scenario`、`chaos_level`、`events`。事件支持 `level`、`message` 和 `at_pct`。
 
+也可以在不改变 YAML 结构的情况下混合新场景：
+
+```yaml
+name: rag-alignment-demo
+description: RAG eval rolls into a compact reward-model pass.
+log_style: trainer
+steps: 80
+step_delay: 0
+save_every: 0
+stages:
+  - name: bootstrap
+    start_pct: 0.0
+    end_pct: 0.1
+    scenario: rag-eval
+    chaos_level: 0
+  - name: eval
+    start_pct: 0.1
+    end_pct: 0.55
+    scenario: rag-eval
+    chaos_level: 1
+    events:
+      - level: INFO
+        message: "faithfulness gate passed while retrieval_hit_rate stayed above target"
+        at_pct: 0.4
+  - name: train
+    start_pct: 0.55
+    end_pct: 0.95
+    scenario: rlhf
+    chaos_level: 1
+  - name: summary
+    start_pct: 0.95
+    end_pct: 1.0
+    scenario: rlhf
+    chaos_level: 0
+```
+
 ## 日志风格
 
 - `trainer`：Hugging Face `Trainer` 风格指标字典。
 - `deepspeed`：DeepSpeed wall-clock/profiler 风格日志。
 - `vllm`：vLLM serving metrics 风格日志。
 - `stable-diffusion`：Diffusers/Accelerate 风格 step 日志。
+
+新场景会在保持 CLI 和 YAML 结构不变的基础上输出 `reward_accuracy`、`faithfulness`、`contrastive_loss`、`pod` 状态等特色字段。
 
 ## 训练阶段
 
@@ -175,6 +217,7 @@ CLI smoke test：
 ```bash
 trainfake presets
 trainfake run boss-is-watching --step-delay 0 --steps 5 --save-every 0
+trainfake run rag-eval-nightly --step-delay 0 --steps 5 --save-every 0
 ```
 
 ## 许可证
